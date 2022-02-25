@@ -17,8 +17,16 @@ where State: Equatable {
     public var state: State
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
-    public var fx: Fx<Action> = Empty(completeImmediately: true)
-        .eraseToAnyPublisher()
+    public var fx: Fx<Action>
+
+    public init(
+        state: State,
+        fx: Fx<Action> = Empty(completeImmediately: true)
+            .eraseToAnyPublisher()
+    ) {
+        self.state = state
+        self.fx = fx
+    }
 
     /// Pipe a state through another update function,
     /// merging their `Fx`.
