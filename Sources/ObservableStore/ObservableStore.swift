@@ -85,7 +85,7 @@ where State: Equatable {
     /// app is stopped.
     public var environment: Environment
 
-    init(
+    public init(
         update: @escaping (
             State,
             Environment,
