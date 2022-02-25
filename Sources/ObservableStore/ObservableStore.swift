@@ -14,10 +14,10 @@ public typealias Fx<Action> = AnyPublisher<Action, Never>
 public struct Update<State, Action>
 where State: Equatable {
     /// `State` for this update
-    var state: State
+    public var state: State
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
-    var fx: Fx<Action> = Empty(completeImmediately: true)
+    public var fx: Fx<Action> = Empty(completeImmediately: true)
         .eraseToAnyPublisher()
 
     /// Pipe a state through another update function,
