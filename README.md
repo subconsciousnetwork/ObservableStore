@@ -28,7 +28,7 @@ struct AppEnvironment {
 }
 
 /// App state
-struct AppState {
+struct AppState: Equatable {
     var count = 0
 
     /// State update function
