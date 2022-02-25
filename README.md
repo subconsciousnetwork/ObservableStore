@@ -2,9 +2,11 @@
 
 A simple Elm-like Store for SwiftUI, based on [ObservableObject](https://developer.apple.com/documentation/combine/observableobject).
 
-Like Elm or Redux, `ObservableStore.Store` offers reliable unidirectional state management. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order.
+Like Elm or Redux, `ObservableStore.Store` offers reliable unidirectional state and effects management. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order.
 
-Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), it can be used anywhere ObservableObject would be used.
+Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), it can be used anywhere in SwiftUI that ObservableObject would be used.
+
+Store is meant to be used as part of a single app-wide, or major-view-wide component. It deliberately does not solve for nested components or nested stores. Following Elm, deeply nested components are avoided. Instead, it is designed for apps that single store, or perhaps one store per major view. Instead of decomposing an app into many stateful components, ObservableStore favors decomposing an app into many stateless views that share the same store and actions. Sub-views can be passed data through bare properties of `store.state`, or bindings, which can be created with `store.binding`, or share the store globally, through [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject). See <https://guide.elm-lang.org/architecture/> and <https://guide.elm-lang.org/webapps/structure.html> for more about this philosophy.
 
 ## Example
 
@@ -69,13 +71,11 @@ struct AppView: View {
 }
 ```
 
-## State, updates, and actions
+## Store, state, updates, and actions
 
-ObservableStore is inspired by the [Elm App Architecture](https://guide.elm-lang.org/architecture/).
+A `Store` is a source of truth for a state. It's an `ObservableObject`. You can use it in a view via `@ObservedObject` or `@StateObject` to power view rendering.
 
-Store exposes a single [`@Published`](https://developer.apple.com/documentation/combine/published) property, `state`, which represents your current application state.
-
-`state` is modeled as an [`Equatable`](https://developer.apple.com/documentation/swift/equatable) type, typically a struct. Updates only mutate the `state` property on `store` when they are not equal. This means returning the same state twice is a no-op, and SwiftUI view body recalculations are only triggered if the state actually changes. Since `state` is `Equatable`, you can also make `Store`-based views [EquatableViews](https://developer.apple.com/documentation/swiftui/equatableview), wherever appropriate.
+Store exposes a single [`@Published`](https://developer.apple.com/documentation/combine/published) property, `state`, which represents your application state. All updates and effects to this state happen through actions sent to `store.send`.
 
 `state` is read-only, and cannot be updated directly. Instead, like Elm, or Redux, all `state` changes happen through a single `update` function, with the signature:
 
@@ -84,6 +84,8 @@ Store exposes a single [`@Published`](https://developer.apple.com/documentation/
 ```
 
 The `Update` returned is a small struct that contains a new state, plus any effects this state change should generate (more about that in a bit).
+
+`state` is modeled as an [`Equatable`](https://developer.apple.com/documentation/swift/equatable) type, typically a struct. Updates only mutate the `state` property on `store` when they are not equal. This means returning the same state twice is a no-op, and SwiftUI view body recalculations are only triggered if the state actually changes. Since `state` is `Equatable`, you can also make `Store`-based views [EquatableViews](https://developer.apple.com/documentation/swiftui/equatableview), wherever appropriate.
 
 ## Effects
 
