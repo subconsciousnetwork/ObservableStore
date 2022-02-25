@@ -33,13 +33,13 @@ struct AppState: Equatable {
 
     /// State update function
     static func update(
-        model: AppState,
+        state: AppState,
         environment: AppEnvironment,
         action: AppAction
     ) -> Update<AppState, AppAction> {
         switch action {
         case .increment:
-            var model = self
+            var model = state
             model.count = model.count + 1
             return Update(state: model)
         }
