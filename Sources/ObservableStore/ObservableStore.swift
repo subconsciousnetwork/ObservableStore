@@ -143,7 +143,9 @@ where State: Equatable {
             receiveCompletion: { [weak self] _ in
                 self?.cancellables.removeValue(forKey: id)
             },
-            receiveValue: self.send
+            receiveValue: { [weak self] action in
+                self?.send(action: action)
+            }
         )
         self.cancellables[id] = cancellable
     }
