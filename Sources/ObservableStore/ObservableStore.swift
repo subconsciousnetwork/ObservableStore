@@ -19,10 +19,9 @@ where State: Equatable {
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
     public var fx: Fx<Action>
-    /// The transaction that store should assign to this update.
-    /// Setting this allows you to drive animations from the update function,
-    /// instead of wrapping calls to send in `withAnimation`.
-    /// If left nil, this update will defer to the global transaction.
+    /// The transaction that should be set during this update.
+    /// Allows update to drive explicit animations.
+    /// If left `nil`, this `Update` defers to the global transaction.
     /// See https://developer.apple.com/documentation/swiftui/transaction
     public var transaction: Transaction?
 
@@ -37,15 +36,15 @@ where State: Equatable {
         self.transaction = transaction
     }
 
-    /// Set this Update's transaction.
+    /// Set transaction for this `Update`.
     /// - Returns a new `Update`
-    public func transaction(_ transaction: Transaction?) -> Self {
+    public func transaction(_ transaction: Transaction) -> Self {
         var this = self
         this.transaction = transaction
         return this
     }
 
-    /// Set this Update's transaction and animation
+    /// Set `Transaction` and `Animation` for this `Update`.
     /// - Returns a new `Update`
     public func animation(_ animation: Animation? = .default) -> Self {
         var this = self
