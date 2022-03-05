@@ -202,11 +202,11 @@ where State: Equatable {
         // If no change has occurred, we avoid setting the property
         // so that body does not need to be reevaluated.
         if self.state != next.state {
-            // If transaction is specified by update, set transaction
-            // then set state.
+            // If transaction is specified by update, set state with
+            // that transaction.
             //
-            // Otherwise, if transaction is `nil`, just set `state`, and
-            // defer to global transaction value.
+            // Otherwise, if transaction is nil, just set state, and
+            // defer to global transaction.
             if let transaction = next.transaction {
                 withTransaction(transaction) {
                     self.state = next.state
