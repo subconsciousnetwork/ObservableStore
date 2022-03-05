@@ -10,7 +10,8 @@ import SwiftUI
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 
-/// Update represents a `State` change, together with an `Fx` publisher.
+/// Update represents a `State` change, together with an `Fx` publisher,
+/// and an optional `Transaction`.
 public struct Update<State, Action>
 where State: Equatable {
     /// `State` for this update
@@ -18,24 +19,56 @@ where State: Equatable {
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
     public var fx: Fx<Action>
+    /// The transaction that should be set during this update.
+    /// Store uses this value to set the transaction while updating state,
+    /// allowing you to drive explicit animations from your update function.
+    /// If left `nil`, store will defer to the global transaction
+    /// for this state update.
+    /// See https://developer.apple.com/documentation/swiftui/transaction
+    public var transaction: Transaction?
 
     public init(
         state: State,
         fx: Fx<Action> = Empty(completeImmediately: true)
-            .eraseToAnyPublisher()
+            .eraseToAnyPublisher(),
+        transaction: Transaction? = nil
     ) {
         self.state = state
         self.fx = fx
+        self.transaction = transaction
     }
 
-    /// Pipe a state through another update function,
-    /// merging their `Fx`.
+    /// Set transaction for this update
+    /// - Returns a new `Update`
+    public func transaction(_ transaction: Transaction) -> Self {
+        var this = self
+        this.transaction = transaction
+        return this
+    }
+
+    /// Set explicit animation for this update.
+    /// Sets new transaction with specified animation.
+    /// - Returns a new `Update`
+    public func animation(_ animation: Animation? = .default) -> Self {
+        var this = self
+        this.transaction = Transaction(animation: animation)
+        return this
+    }
+
+    /// Pipe a state through another update function.
+    /// Merges `fx`.
+    /// Replaces `transaction` with new `Update` transaction.
+    /// - Returns a new `Update`
     public func pipe(
-        _ through: (State) -> Update<State, Action>
-    ) -> Update<State, Action> {
-        let up = through(self.state)
-        let fx = self.fx.merge(with: up.fx).eraseToAnyPublisher()
-        return Update(state: up.state, fx: fx)
+        _ through: (State) -> Self
+    ) -> Self {
+        let next = through(self.state)
+        let fx = self.fx.merge(with: next.fx).eraseToAnyPublisher()
+        return Update(
+            state: next.state,
+            fx: fx,
+            transaction: next.transaction
+        )
     }
 }
 
@@ -162,7 +195,7 @@ where State: Equatable {
     /// `.receive(on: DispatchQueue.main)`).
     public func send(action: Action) {
         // Generate next state and effect
-        let change = update(self.state, self.environment, action)
+        let next = update(self.state, self.environment, action)
         // Set `state` if changed.
         //
         // Mutating state (a `@Published` property) will fire `objectWillChange`
@@ -171,10 +204,21 @@ where State: Equatable {
         //
         // If no change has occurred, we avoid setting the property
         // so that body does not need to be reevaluated.
-        if self.state != change.state {
-            self.state = change.state
+        if self.state != next.state {
+            // If transaction is specified by update, set state with
+            // that transaction.
+            //
+            // Otherwise, if transaction is nil, just set state, and
+            // defer to global transaction.
+            if let transaction = next.transaction {
+                withTransaction(transaction) {
+                    self.state = next.state
+                }
+            } else {
+                self.state = next.state
+            }
         }
         // Run effect
-        self.subscribe(fx: change.fx)
+        self.subscribe(fx: next.fx)
     }
 }
