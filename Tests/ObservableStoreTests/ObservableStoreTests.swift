@@ -2,25 +2,24 @@ import XCTest
 @testable import ObservableStore
 
 final class ObservableStoreTests: XCTestCase {
-    enum AppAction {
-        case increment
-        case setCount(Int)
-    }
-
-    /// Services like API methods go here
-    struct AppEnvironment {
-    }
-
     /// App state
     struct AppState: Equatable {
-        var count = 0
+        enum Action {
+            case increment
+            case setCount(Int)
+            case setEditor(Editor)
+        }
+
+        /// Services like API methods go here
+        struct Environment {
+        }
 
         /// State update function
         static func update(
-            state: AppState,
-            environment: AppEnvironment,
-            action: AppAction
-        ) -> Update<AppState, AppAction> {
+            state: Self,
+            environment: Environment,
+            action: Action
+        ) -> Update<Self, Action> {
             switch action {
             case .increment:
                 var model = state
@@ -30,15 +29,30 @@ final class ObservableStoreTests: XCTestCase {
                 var model = state
                 model.count = count
                 return Update(state: model)
+            case .setEditor(let editor):
+                var model = state
+                model.editor = editor
+                return Update(state: model)
             }
         }
+
+        struct Editor: Equatable {
+            struct Input: Equatable {
+                var text: String = ""
+                var isFocused: Bool = true
+            }
+            var input = Input()
+        }
+
+        var count = 0
+        var editor = Editor()
     }
 
     func testStateAdvance() throws {
         let store = Store(
             update: AppState.update,
             state: AppState(),
-            environment: AppEnvironment()
+            environment: AppState.Environment()
         )
 
         store.send(action: .increment)
@@ -49,13 +63,33 @@ final class ObservableStoreTests: XCTestCase {
         let store = Store(
             update: AppState.update,
             state: AppState(),
-            environment: AppEnvironment()
+            environment: AppState.Environment()
         )
         let binding = store.binding(
             get: \.count,
-            tag: AppAction.setCount
+            tag: AppState.Action.setCount
         )
         binding.wrappedValue = 2
         XCTAssertEqual(store.state.count, 2, "binding sends action")
+    }
+
+    func testDeepBinding() throws {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+        let binding = store.binding(
+            get: \.editor,
+            tag: AppState.Action.setEditor
+        )
+        .input
+        .text
+        binding.wrappedValue = "floop"
+        XCTAssertEqual(
+            store.state.editor.input.text,
+            "floop",
+            "specialized binding sets deep property"
+        )
     }
 }
