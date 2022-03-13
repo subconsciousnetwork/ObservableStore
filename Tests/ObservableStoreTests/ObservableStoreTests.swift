@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import ObservableStore
 
 final class ObservableStoreTests: XCTestCase {
@@ -6,12 +7,24 @@ final class ObservableStoreTests: XCTestCase {
     struct AppState: Equatable {
         enum Action {
             case increment
+            case delayIncrement(Double)
             case setCount(Int)
             case setEditor(Editor)
         }
 
         /// Services like API methods go here
-        struct Environment {}
+        struct Environment {
+            func delayIncrement(
+                seconds: Double
+            ) -> AnyPublisher<Action, Never> {
+                Just(Action.increment)
+                    .delay(
+                        for: .seconds(seconds),
+                        scheduler: DispatchQueue.main
+                    )
+                    .eraseToAnyPublisher()
+            }
+        }
 
         /// State update function
         static func update(
@@ -24,6 +37,11 @@ final class ObservableStoreTests: XCTestCase {
                 var model = state
                 model.count = model.count + 1
                 return Update(state: model)
+            case .delayIncrement(let seconds):
+                return Update(
+                    state: state,
+                    fx: environment.delayIncrement(seconds: seconds)
+                )
             case .setCount(let count):
                 var model = state
                 model.count = count
@@ -113,5 +131,27 @@ final class ObservableStoreTests: XCTestCase {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 0.1)
+    }
+
+    func testAsyncFxRemovedOnComplete() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+        store.send(action: .delayIncrement(0.1))
+        store.send(action: .delayIncrement(0.2))
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.5)
     }
 }
