@@ -100,7 +100,7 @@ where State: Equatable {
 public final class Store<State, Environment, Action>: ObservableObject
 where State: Equatable {
     /// Stores cancellables by ID
-    private var cancellables: [UUID: AnyCancellable] = [:]
+    private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
     @Published public private(set) var state: State
@@ -172,15 +172,19 @@ where State: Equatable {
         // the effect, and then removes it, so we don't have a cancellables
         // memory leak.
         let id = UUID()
+        var isComplete = false
         let cancellable = fx.sink(
             receiveCompletion: { [weak self] _ in
+                isComplete = true
                 self?.cancellables.removeValue(forKey: id)
             },
             receiveValue: { [weak self] action in
                 self?.send(action: action)
             }
         )
-        self.cancellables[id] = cancellable
+        if !isComplete {
+            self.cancellables[id] = cancellable
+        }
     }
 
     /// Send an action to the store to update state and generate effects.

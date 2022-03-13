@@ -11,8 +11,7 @@ final class ObservableStoreTests: XCTestCase {
         }
 
         /// Services like API methods go here
-        struct Environment {
-        }
+        struct Environment {}
 
         /// State update function
         static func update(
@@ -90,6 +89,22 @@ final class ObservableStoreTests: XCTestCase {
             store.state.editor.input.text,
             "floop",
             "specialized binding sets deep property"
+        )
+    }
+
+    func testEmptyFxRemovedOnComplete() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+        store.send(action: .increment)
+        store.send(action: .increment)
+        store.send(action: .increment)
+        XCTAssertEqual(
+            store.cancellables.count,
+            0,
+            "cancellables removed when publisher completes"
         )
     }
 }
