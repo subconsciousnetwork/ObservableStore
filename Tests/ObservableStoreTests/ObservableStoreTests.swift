@@ -101,10 +101,17 @@ final class ObservableStoreTests: XCTestCase {
         store.send(action: .increment)
         store.send(action: .increment)
         store.send(action: .increment)
-        XCTAssertEqual(
-            store.cancellables.count,
-            0,
-            "cancellables removed when publisher completes"
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
         )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
     }
 }

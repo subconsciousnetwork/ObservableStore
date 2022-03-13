@@ -172,19 +172,33 @@ where State: Equatable {
         // the effect, and then removes it, so we don't have a cancellables
         // memory leak.
         let id = UUID()
-        var isComplete = false
-        let cancellable = fx.sink(
-            receiveCompletion: { [weak self] _ in
-                isComplete = true
-                self?.cancellables.removeValue(forKey: id)
-            },
-            receiveValue: { [weak self] action in
-                self?.send(action: action)
-            }
-        )
-        if !isComplete {
-            self.cancellables[id] = cancellable
-        }
+        // Receive Fx on main thread. This does two important things:
+        //
+        // First, SwiftUI requires that any state mutations that would change
+        // views happen on the main thread. Receiving on main ensures that
+        // all fx-driven state transitions happen on main, even if the
+        // publisher is off-main-thread.
+        //
+        // Second, if we didn't schedule receive on main, it would be possible
+        // for publishers to complete immediately, causing receiveCompletion
+        // to attempt to remove the publisher from `cancellables` before
+        // it is added. By scheduling to receive publisher on main,
+        // we force publisher to complete on next tick, ensuring that it
+        // is always first added, then removed from `cancellables`.
+        let cancellable = fx
+            .receive(
+                on: DispatchQueue.main,
+                options: .init(qos: .userInteractive)
+            )
+            .sink(
+                receiveCompletion: { [weak self] _ in
+                    self?.cancellables.removeValue(forKey: id)
+                },
+                receiveValue: { [weak self] action in
+                    self?.send(action: action)
+                }
+            )
+        self.cancellables[id] = cancellable
     }
 
     /// Send an action to the store to update state and generate effects.
