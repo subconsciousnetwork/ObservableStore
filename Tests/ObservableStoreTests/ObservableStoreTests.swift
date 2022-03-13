@@ -65,6 +65,13 @@ final class ObservableStoreTests: XCTestCase {
         var editor = Editor()
     }
 
+    var cancellables = Set<AnyCancellable>()
+
+    override func setUp() {
+        // Empty cancellables
+        self.cancellables = Set()
+    }
+
     func testStateAdvance() throws {
         let store = Store(
             update: AppState.update,
@@ -153,5 +160,41 @@ final class ObservableStoreTests: XCTestCase {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 0.5)
+    }
+
+    func testStateOnlySetWhenNotEqual() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+
+        let expectation = XCTestExpectation(
+            description: "check that equal states are not set"
+        )
+
+        var stateFires = 0
+        store.$state
+            .timeout(.seconds(0.1), scheduler: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { value in
+                    XCTAssertEqual(
+                        stateFires,
+                        2,
+                        "Equal states are not set. $state only fires for new states."
+                    )
+                    expectation.fulfill()
+                },
+                receiveValue: { value in
+                    stateFires = stateFires + 1
+                }
+            )
+            .store(in: &self.cancellables)
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+
+        wait(for: [expectation], timeout: 0.2)
     }
 }
