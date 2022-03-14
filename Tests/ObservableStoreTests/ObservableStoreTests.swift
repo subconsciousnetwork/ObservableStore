@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import ObservableStore
 
 final class ObservableStoreTests: XCTestCase {
@@ -6,12 +7,23 @@ final class ObservableStoreTests: XCTestCase {
     struct AppState: Equatable {
         enum Action {
             case increment
+            case delayIncrement(Double)
             case setCount(Int)
             case setEditor(Editor)
         }
 
         /// Services like API methods go here
         struct Environment {
+            func delayIncrement(
+                seconds: Double
+            ) -> AnyPublisher<Action, Never> {
+                Just(Action.increment)
+                    .delay(
+                        for: .seconds(seconds),
+                        scheduler: DispatchQueue.main
+                    )
+                    .eraseToAnyPublisher()
+            }
         }
 
         /// State update function
@@ -25,6 +37,11 @@ final class ObservableStoreTests: XCTestCase {
                 var model = state
                 model.count = model.count + 1
                 return Update(state: model)
+            case .delayIncrement(let seconds):
+                return Update(
+                    state: state,
+                    fx: environment.delayIncrement(seconds: seconds)
+                )
             case .setCount(let count):
                 var model = state
                 model.count = count
@@ -46,6 +63,13 @@ final class ObservableStoreTests: XCTestCase {
 
         var count = 0
         var editor = Editor()
+    }
+
+    var cancellables = Set<AnyCancellable>()
+
+    override func setUp() {
+        // Empty cancellables
+        self.cancellables = Set()
     }
 
     func testStateAdvance() throws {
@@ -91,5 +115,86 @@ final class ObservableStoreTests: XCTestCase {
             "floop",
             "specialized binding sets deep property"
         )
+    }
+
+    func testEmptyFxRemovedOnComplete() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+        store.send(action: .increment)
+        store.send(action: .increment)
+        store.send(action: .increment)
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    func testAsyncFxRemovedOnComplete() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+        store.send(action: .delayIncrement(0.1))
+        store.send(action: .delayIncrement(0.2))
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.5)
+    }
+
+    func testStateOnlySetWhenNotEqual() {
+        let store = Store(
+            update: AppState.update,
+            state: AppState(),
+            environment: AppState.Environment()
+        )
+
+        let expectation = XCTestExpectation(
+            description: "check that equal states are not set"
+        )
+
+        var stateFires = 0
+        store.$state
+            .timeout(.seconds(0.1), scheduler: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { value in
+                    XCTAssertEqual(
+                        stateFires,
+                        2,
+                        "Equal states are not set. $state only fires for new states."
+                    )
+                    expectation.fulfill()
+                },
+                receiveValue: { value in
+                    stateFires = stateFires + 1
+                }
+            )
+            .store(in: &self.cancellables)
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+        store.send(action: .setCount(10))
+
+        wait(for: [expectation], timeout: 0.2)
     }
 }
