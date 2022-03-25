@@ -197,4 +197,82 @@ final class ObservableStoreTests: XCTestCase {
 
         wait(for: [expectation], timeout: 0.2)
     }
+
+    /// Definition for app to test updates
+    struct TestUpdateMergeFxState: Equatable {
+        enum Action {
+            case setTitleAndSubtitleViaMergeFx(
+                title: String,
+                subtitle: String
+            )
+            case setTitle(String)
+            case setSubtitle(String)
+        }
+
+        struct Environment {}
+
+        /// Update function for Fx tests (below)
+        static func update(
+            state: Self,
+            environment: Environment,
+            action: Action
+        ) -> Update<Self, Action> {
+            switch action {
+            case .setTitle(let title):
+                var model = state
+                model.title = title
+                return Update(state: model)
+            case .setSubtitle(let subtitle):
+                var model = state
+                model.subtitle = subtitle
+                return Update(state: model)
+            case .setTitleAndSubtitleViaMergeFx(let title, let subtitle):
+                let a = Just(Action.setTitle(title))
+                    .eraseToAnyPublisher()
+                let b = Just(Action.setSubtitle(subtitle))
+                    .eraseToAnyPublisher()
+                return Update(
+                    state: state,
+                    fx: a
+                )
+                .mergeFx(b)
+            }
+        }
+
+        var title: String = ""
+        var subtitle: String = ""
+    }
+    
+    func testUpdateMergeFx() {
+        let store = Store(
+            update: TestUpdateMergeFxState.update,
+            state: TestUpdateMergeFxState(),
+            environment: TestUpdateMergeFxState.Environment()
+        )
+        store.send(
+            action: .setTitleAndSubtitleViaMergeFx(
+                title: "title",
+                subtitle: "subtitle"
+            )
+        )
+
+        let expectation = XCTestExpectation(
+            description: "check that update fx are merged"
+        )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            XCTAssertEqual(
+                store.state.title,
+                "title",
+                "title set"
+            )
+            XCTAssertEqual(
+                store.state.subtitle,
+                "subtitle",
+                "subtitle set"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.2)
+    }
 }

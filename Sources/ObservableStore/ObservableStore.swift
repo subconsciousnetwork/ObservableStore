@@ -38,29 +38,11 @@ where State: Equatable {
         self.transaction = transaction
     }
 
-    /// Set fx for this update
-    /// This will replace any existing fx for the update.
+    /// Merge existing fx together with new fx.
     /// - Returns a new `Update`
-    func fx(_ fx: Fx<Action>) -> Update<State, Action> {
-        var this = self
-        this.fx = fx
-        return this
-    }
-
-    /// Merge existing fx in this update with new fx.
-    /// The resulting update will contain an fx publisher
-    /// - Returns a new `Update`
-    func mergeFx(_ fx: Fx<Action>) -> Update<State, Action> {
+    public func mergeFx(_ fx: Fx<Action>) -> Update<State, Action> {
         var this = self
         this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
-        return this
-    }
-
-    /// Set transaction for this update
-    /// - Returns a new `Update`
-    public func transaction(_ transaction: Transaction) -> Self {
-        var this = self
-        this.transaction = transaction
         return this
     }
 
