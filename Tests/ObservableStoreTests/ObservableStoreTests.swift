@@ -79,7 +79,7 @@ final class ObservableStoreTests: XCTestCase {
             environment: AppState.Environment()
         )
 
-        store.send(action: .increment)
+        store.send(.increment)
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
 
@@ -123,9 +123,9 @@ final class ObservableStoreTests: XCTestCase {
             state: AppState(),
             environment: AppState.Environment()
         )
-        store.send(action: .increment)
-        store.send(action: .increment)
-        store.send(action: .increment)
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
@@ -146,8 +146,8 @@ final class ObservableStoreTests: XCTestCase {
             state: AppState(),
             environment: AppState.Environment()
         )
-        store.send(action: .delayIncrement(0.1))
-        store.send(action: .delayIncrement(0.2))
+        store.send(.delayIncrement(0.1))
+        store.send(.delayIncrement(0.2))
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
@@ -190,10 +190,10 @@ final class ObservableStoreTests: XCTestCase {
                 }
             )
             .store(in: &self.cancellables)
-        store.send(action: .setCount(10))
-        store.send(action: .setCount(10))
-        store.send(action: .setCount(10))
-        store.send(action: .setCount(10))
+        store.send(.setCount(10))
+        store.send(.setCount(10))
+        store.send(.setCount(10))
+        store.send(.setCount(10))
 
         wait(for: [expectation], timeout: 0.2)
     }
@@ -250,7 +250,7 @@ final class ObservableStoreTests: XCTestCase {
             environment: TestUpdateMergeFxState.Environment()
         )
         store.send(
-            action: .setTitleAndSubtitleViaMergeFx(
+            .setTitleAndSubtitleViaMergeFx(
                 title: "title",
                 subtitle: "subtitle"
             )
