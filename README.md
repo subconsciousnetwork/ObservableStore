@@ -59,7 +59,7 @@ struct AppView: View {
                 action: {
                     // Send `.increment` action to store,
                     // updating state.
-                    store.send(action: .increment)
+                    store.send(.increment)
                 },
                 label: {
                     Text("Increment")
@@ -94,11 +94,11 @@ There are a few different ways to work with Store in views.
 Text(store.state.text)
 ```
 
-`Store.send(action:)` lets you send actions to the store to change state. You might call send within a button action, or event callback, for example.
+`Store.send(_)` lets you send actions to the store to change state. You might call send within a button action, or event callback, for example.
 
 ```swift
 Button("Set color to red") {
-    store.send(action: AppAction.setColor(.red))
+    store.send(AppAction.setColor(.red))
 }
 ```
 
