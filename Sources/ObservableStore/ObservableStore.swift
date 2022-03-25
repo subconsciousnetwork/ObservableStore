@@ -147,12 +147,26 @@ where State: Equatable {
 
     /// Create a binding that can update the store.
     /// Sets send actions to the store, rather than setting values directly.
+    public func binding<Value>(
+        get: @escaping (State) -> Value,
+        tag: @escaping (Value) -> Action
+    ) -> Binding<Value> {
+        Binding(
+            get: { get(self.state) },
+            set: { value in
+                self.send(tag(value))
+            }
+        )
+    }
+
+    /// Create a binding that can update the store.
+    /// Sets send actions to the store, rather than setting values directly.
     /// Optional `animation` parameter allows you to trigger an animation
     /// for binding sets.
     public func binding<Value>(
         get: @escaping (State) -> Value,
         tag: @escaping (Value) -> Action,
-        animation: Animation? = nil
+        animation: Animation?
     ) -> Binding<Value> {
         Binding(
             get: { get(self.state) },
