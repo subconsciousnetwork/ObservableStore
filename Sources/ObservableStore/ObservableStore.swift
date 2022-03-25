@@ -158,7 +158,7 @@ where State: Equatable {
             get: { get(self.state) },
             set: { value in
                 withAnimation(animation) {
-                    self.send(action: tag(value))
+                    self.send(tag(value))
                 }
             }
         )
@@ -169,7 +169,7 @@ where State: Equatable {
     ///
     /// Holds on to the cancellable until publisher completes.
     /// When publisher completes, removes cancellable.
-    public func subscribe(fx: Fx<Action>) {
+    public func subscribe(_ fx: Fx<Action>) {
         // Create a UUID for the cancellable.
         // Store cancellable in dictionary by UUID.
         // Remove cancellable from dictionary upon effect completion.
@@ -200,7 +200,7 @@ where State: Equatable {
                     self?.cancellables.removeValue(forKey: id)
                 },
                 receiveValue: { [weak self] action in
-                    self?.send(action: action)
+                    self?.send(action)
                 }
             )
         self.cancellables[id] = cancellable
@@ -216,7 +216,7 @@ where State: Equatable {
     /// However it also means that publishers which run off-main-thread MUST
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
-    public func send(action: Action) {
+    public func send(_ action: Action) {
         // Generate next state and effect
         let next = update(self.state, self.environment, action)
         // Set `state` if changed.
@@ -242,6 +242,6 @@ where State: Equatable {
             }
         }
         // Run effect
-        self.subscribe(fx: next.fx)
+        self.subscribe(next.fx)
     }
 }
