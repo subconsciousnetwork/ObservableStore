@@ -38,11 +38,11 @@ where State: Equatable {
         self.transaction = transaction
     }
 
-    /// Set transaction for this update
+    /// Merge existing fx together with new fx.
     /// - Returns a new `Update`
-    public func transaction(_ transaction: Transaction) -> Self {
+    public func mergeFx(_ fx: Fx<Action>) -> Update<State, Action> {
         var this = self
-        this.transaction = transaction
+        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
         return this
     }
 
@@ -56,8 +56,13 @@ where State: Equatable {
     }
 
     /// Pipe a state through another update function.
-    /// Merges `fx`.
-    /// Replaces `transaction` with new `Update` transaction.
+    /// Allows you to compose multiple update functions together through
+    /// method chaining.
+    ///
+    /// - Updates state,
+    /// - Merges `fx`.
+    /// - Replaces `transaction` with new `Update` transaction.
+    ///
     /// - Returns a new `Update`
     public func pipe(
         _ through: (State) -> Self
