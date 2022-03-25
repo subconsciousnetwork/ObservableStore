@@ -102,7 +102,7 @@ Button("Set color to red") {
 }
 ```
 
-`Store.binding(get:tag:animation:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the state. A get function reads the state into a value, a tag function turns a value set on the binding into an action. The result is a binding that can be passed to any vanilla SwiftUI view, yet changes state only through deterministic updates.
+`Store.binding(get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the state. A get function reads the state into a value, a tag function turns a value set on the binding into an action. The result is a binding that can be passed to any vanilla SwiftUI view, yet changes state only through deterministic updates.
 
 ```swift
 TextField(
@@ -207,21 +207,4 @@ func update(
 }
 ```
 
-Alternatively, you can use the lower-level `Update.transaction` API to set the [Transaction](https://developer.apple.com/documentation/swiftui/transaction) for this state update:
-
-```swift
-func update(
-    state: State,
-    environment: Environment,
-    action: Action
-) -> Update<State, Action> {
-    switch action {
-    // ...
-    case .authenticate(let credentials):
-        return Update(state: state)
-            .transaction(
-                Transaction(animation: .default)
-            )
-    }
-}
-```
+When you specify a transition or animation as part of an Update thisway, Store will use it when setting the state for the update.
