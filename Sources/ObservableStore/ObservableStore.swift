@@ -169,7 +169,7 @@ where State: Equatable {
     ///
     /// Holds on to the cancellable until publisher completes.
     /// When publisher completes, removes cancellable.
-    public func subscribe(_ fx: Fx<Action>) {
+    public func subscribe(to fx: Fx<Action>) {
         // Create a UUID for the cancellable.
         // Store cancellable in dictionary by UUID.
         // Remove cancellable from dictionary upon effect completion.
@@ -242,6 +242,6 @@ where State: Equatable {
             }
         }
         // Run effect
-        self.subscribe(next.fx)
+        self.subscribe(to: next.fx)
     }
 }
