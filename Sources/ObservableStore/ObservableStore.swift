@@ -102,7 +102,7 @@ where State: Equatable {
 /// See https://guide.elm-lang.org/architecture/
 /// and https://guide.elm-lang.org/webapps/structure.html
 /// for more about this approach.
-public final class Store<State, Environment, Action>: ObservableObject
+public final class Store<State, Action, Environment>: ObservableObject
 where State: Equatable {
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
@@ -112,8 +112,8 @@ where State: Equatable {
     /// Update function for state
     public var update: (
         State,
-        Environment,
-        Action
+        Action,
+        Environment
     ) -> Update<State, Action>
     /// Environment, which typically holds references to outside information,
     /// such as API methods.
@@ -134,8 +134,8 @@ where State: Equatable {
     public init(
         update: @escaping (
             State,
-            Environment,
-            Action
+            Action,
+            Environment
         ) -> Update<State, Action>,
         state: State,
         environment: Environment
@@ -232,7 +232,7 @@ where State: Equatable {
     /// `.receive(on: DispatchQueue.main)`).
     public func send(_ action: Action) {
         // Generate next state and effect
-        let next = update(self.state, self.environment, action)
+        let next = update(self.state, action, self.environment)
         // Set `state` if changed.
         //
         // Mutating state (a `@Published` property) will fire `objectWillChange`

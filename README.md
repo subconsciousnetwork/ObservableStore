@@ -33,8 +33,8 @@ struct AppState: Equatable {
     /// State update function
     static func update(
         state: AppState,
-        environment: AppEnvironment,
-        action: AppAction
+        action: AppAction,
+        environment: AppEnvironment
     ) -> Update<AppState, AppAction> {
         switch action {
         case .increment:
@@ -77,7 +77,7 @@ A `Store` is a source of truth for application state. It's an [ObservableObject]
 Store exposes a single [`@Published`](https://developer.apple.com/documentation/combine/published) property, `state`, which represents your application state. `state` is read-only, and cannot be updated directly. Instead, like Elm or Redux, all `state` changes happen through a single `update` function, with the signature:
 
 ```
-(State, Environment, Action) -> Update<State, Action>
+(State, Action, Environment) -> Update<State, Action>
 ```
 
 The `Update` returned is a small struct that contains a new state, plus any optional effects and animations associated with the state transition (more about that in a bit).
@@ -171,8 +171,8 @@ You can subscribe to an effects publisher by returning it as part of an Update:
 ```swift
 func update(
     state: State,
-    environment: Environment,
-    action: Action
+    action: Action,
+    environment: Environment
 ) -> Update<State, Action> {
     switch action {
     // ...
@@ -196,8 +196,8 @@ Use `Update.animation` to set an explicit [Animation](https://developer.apple.co
 ```swift
 func update(
     state: State,
-    environment: Environment,
-    action: Action
+    action: Action,
+    environment: Environment
 ) -> Update<State, Action> {
     switch action {
     // ...
