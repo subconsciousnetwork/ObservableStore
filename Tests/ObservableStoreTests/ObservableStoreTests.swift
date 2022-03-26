@@ -29,8 +29,8 @@ final class ObservableStoreTests: XCTestCase {
         /// State update function
         static func update(
             state: Self,
-            environment: Environment,
-            action: Action
+            action: Action,
+            environment: Environment
         ) -> Update<Self, Action> {
             switch action {
             case .increment:
@@ -214,8 +214,8 @@ final class ObservableStoreTests: XCTestCase {
         /// Update function for Fx tests (below)
         static func update(
             state: Self,
-            environment: Environment,
-            action: Action
+            action: Action,
+            environment: Environment
         ) -> Update<Self, Action> {
             switch action {
             case .setTitle(let title):
