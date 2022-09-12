@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import SwiftUI
 @testable import ObservableStore
 
 final class ObservableStoreTests: XCTestCase {
@@ -89,7 +90,8 @@ final class ObservableStoreTests: XCTestCase {
             state: AppState(),
             environment: AppState.Environment()
         )
-        let binding = store.binding(
+        let binding = Binding(
+            store: store,
             get: \.count,
             tag: AppState.Action.setCount
         )
@@ -103,7 +105,8 @@ final class ObservableStoreTests: XCTestCase {
             state: AppState(),
             environment: AppState.Environment()
         )
-        let binding = store.binding(
+        let binding = Binding(
+            store: store,
             get: \.editor,
             tag: AppState.Action.setEditor
         )
