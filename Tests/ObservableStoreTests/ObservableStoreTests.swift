@@ -5,7 +5,7 @@ import SwiftUI
 
 final class ObservableStoreTests: XCTestCase {
     /// App state
-    struct AppState: Equatable {
+    struct AppModel: ModelProtocol {
         enum Action {
             case increment
             case delayIncrement(Double)
@@ -29,10 +29,10 @@ final class ObservableStoreTests: XCTestCase {
 
         /// State update function
         static func update(
-            state: Self,
+            state: AppModel,
             action: Action,
             environment: Environment
-        ) -> Update<Self, Action> {
+        ) -> Update<AppModel> {
             switch action {
             case .increment:
                 var model = state
@@ -73,11 +73,72 @@ final class ObservableStoreTests: XCTestCase {
         self.cancellables = Set()
     }
 
+    func testPublishedPropertyFires() throws {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+
+        var count = 0
+        store.objectWillChange
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
+
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                3,
+                "publisher fires when state changes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    func testPublishedPropertyNoFireForSameState() throws {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+
+        var count = 0
+        store.objectWillChange
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.setCount(1))
+        store.send(.setCount(1))
+        store.send(.setCount(1))
+
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                1,
+                "publisher does not fire when state does not change"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
     func testStateAdvance() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
 
         store.send(.increment)
@@ -86,14 +147,13 @@ final class ObservableStoreTests: XCTestCase {
 
     func testBinding() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         let binding = Binding(
             store: store,
             get: \.count,
-            tag: AppState.Action.setCount
+            tag: AppModel.Action.setCount
         )
         binding.wrappedValue = 2
         XCTAssertEqual(store.state.count, 2, "binding sends action")
@@ -101,14 +161,13 @@ final class ObservableStoreTests: XCTestCase {
 
     func testDeepBinding() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         let binding = Binding(
             store: store,
             get: \.editor,
-            tag: AppState.Action.setEditor
+            tag: AppModel.Action.setEditor
         )
         .input
         .text
@@ -122,9 +181,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testEmptyFxRemovedOnComplete() {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         store.send(.increment)
         store.send(.increment)
@@ -145,9 +203,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testAsyncFxRemovedOnComplete() {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         store.send(.delayIncrement(0.1))
         store.send(.delayIncrement(0.2))
@@ -167,9 +224,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testStateOnlySetWhenNotEqual() {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
 
         let expectation = XCTestExpectation(
@@ -202,7 +258,7 @@ final class ObservableStoreTests: XCTestCase {
     }
 
     /// Definition for app to test updates
-    struct TestUpdateMergeFxState: Equatable {
+    struct TestUpdateMergeFxState: ModelProtocol {
         enum Action {
             case setTitleAndSubtitleViaMergeFx(
                 title: String,
@@ -219,7 +275,7 @@ final class ObservableStoreTests: XCTestCase {
             state: Self,
             action: Action,
             environment: Environment
-        ) -> Update<Self, Action> {
+        ) -> Update<Self> {
             switch action {
             case .setTitle(let title):
                 var model = state
@@ -248,7 +304,6 @@ final class ObservableStoreTests: XCTestCase {
     
     func testUpdateMergeFx() {
         let store = Store(
-            update: TestUpdateMergeFxState.update,
             state: TestUpdateMergeFxState(),
             environment: TestUpdateMergeFxState.Environment()
         )

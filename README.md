@@ -323,7 +323,8 @@ struct AppModel: Equatable {
             )
         }
     }
-}```
+}
+```
 
 This tagging/update pattern gives parent components an opportunity to intercept and handle child actions in special ways.
 

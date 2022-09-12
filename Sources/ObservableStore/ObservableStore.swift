@@ -10,14 +10,28 @@ import SwiftUI
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 
-/// Update represents a `State` change, together with an `Fx` publisher,
+/// A model is an equatable type that knows how to create
+/// state `Updates` for itself via a static update function.
+public protocol ModelProtocol: Equatable {
+    associatedtype Action
+    associatedtype Environment
+
+    static func update(
+        state: Self,
+        action: Action,
+        environment: Environment
+    ) -> Update<Self>
+}
+
+/// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<State, Action> {
+public struct Update<Model>
+where Model: ModelProtocol {
     /// `State` for this update
-    public var state: State
+    public var state: Model
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
-    public var fx: Fx<Action>
+    public var fx: Fx<Model.Action>
     /// The transaction that should be set during this update.
     /// Store uses this value to set the transaction while updating state,
     /// allowing you to drive explicit animations from your update function.
@@ -27,8 +41,8 @@ public struct Update<State, Action> {
     public var transaction: Transaction?
 
     public init(
-        state: State,
-        fx: Fx<Action> = Empty(completeImmediately: true)
+        state: Model,
+        fx: Fx<Model.Action> = Empty(completeImmediately: true)
             .eraseToAnyPublisher(),
         transaction: Transaction? = nil
     ) {
@@ -39,7 +53,7 @@ public struct Update<State, Action> {
 
     /// Merge existing fx together with new fx.
     /// - Returns a new `Update`
-    public func mergeFx(_ fx: Fx<Action>) -> Update<State, Action> {
+    public func mergeFx(_ fx: Fx<Model.Action>) -> Update<Model> {
         var this = self
         this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
         return this
@@ -64,7 +78,7 @@ public struct Update<State, Action> {
     ///
     /// - Returns a new `Update`
     public func pipe(
-        _ through: (State) -> Self
+        _ through: (Model) -> Self
     ) -> Self {
         let next = through(self.state)
         let fx = self.fx.merge(with: next.fx).eraseToAnyPublisher()
@@ -79,14 +93,12 @@ public struct Update<State, Action> {
 /// A store is any type that can
 /// - get an equatable `state`
 /// - `send` actions
-/// Stores are equatable, meaning you can also use them with `EquatableView`.
 public protocol StoreProtocol {
-    associatedtype State
-    associatedtype Action
+    associatedtype Model: ModelProtocol
 
-    var state: State { get }
+    var state: Model { get }
 
-    func send(_ action: Action) -> Void
+    func send(_ action: Model.Action) -> Void
 }
 
 /// Store is a source of truth for a state.
@@ -97,29 +109,14 @@ public protocol StoreProtocol {
 /// Store has a `@Published` `state` (typically a struct).
 /// All updates and effects to this state happen through actions
 /// sent to `store.send`.
-public final class Store<State, Action, Environment>:
-    ObservableObject, StoreProtocol, Equatable
-where
-    State: Equatable
+public final class Store<Model>: ObservableObject, StoreProtocol
+where Model: ModelProtocol
 {
-    public static func == (
-        lhs: Store<State, Action, Environment>,
-        rhs: Store<State, Action, Environment>
-    ) -> Bool {
-        lhs.state == rhs.state
-    }
-
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
-    @Published public private(set) var state: State
-    /// Update function for state
-    public var update: (
-        State,
-        Action,
-        Environment
-    ) -> Update<State, Action>
+    @Published public private(set) var state: Model
     /// Environment, which typically holds references to outside information,
     /// such as API methods.
     ///
@@ -134,18 +131,12 @@ where
     /// Store will hold on to the resulting `fx` publisher until it completes,
     /// which in the case of long-lived services, could be until the
     /// app is stopped.
-    public var environment: Environment
+    public var environment: Model.Environment
 
     public init(
-        update: @escaping (
-            State,
-            Action,
-            Environment
-        ) -> Update<State, Action>,
-        state: State,
-        environment: Environment
+        state: Model,
+        environment: Model.Environment
     ) {
-        self.update = update
         self.state = state
         self.environment = environment
     }
@@ -155,7 +146,7 @@ where
     ///
     /// Holds on to the cancellable until publisher completes.
     /// When publisher completes, removes cancellable.
-    public func subscribe(to fx: Fx<Action>) {
+    public func subscribe(to fx: Fx<Model.Action>) {
         // Create a UUID for the cancellable.
         // Store cancellable in dictionary by UUID.
         // Remove cancellable from dictionary upon effect completion.
@@ -194,9 +185,13 @@ where
     /// However it also means that publishers which run off-main-thread MUST
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
-    public func send(_ action: Action) {
+    public func send(_ action: Model.Action) {
         // Generate next state and effect
-        let next = update(self.state, action, self.environment)
+        let next = Model.update(
+            state: self.state,
+            action: action,
+            environment: self.environment
+        )
         // Set `state` if changed.
         //
         // Mutating state (a `@Published` property) will fire `objectWillChange`
@@ -224,55 +219,42 @@ where
     }
 }
 
-/// LensProtocol defines a way to get and set inner values in an outer
-/// data container.
-public protocol LensProtocol {
-    associatedtype OuterState
-    associatedtype InnerState
+/// A cursor provides a complete description of how to map from one component
+/// domain to another.
+public protocol CursorProtocol {
+    associatedtype Model: ModelProtocol
+    associatedtype ViewModel: ModelProtocol
 
     /// Get an inner state from an outer state
-    static func get(state: OuterState) -> InnerState
+    static func get(state: Model) -> ViewModel
 
     /// Set an inner state on an outer state, returning an outer state
-    static func set(state: OuterState, inner: InnerState) -> OuterState
-}
-
-/// TaggableActionProtocol defines a way to box an action for passing
-/// between domains.
-public protocol TaggableActionProtocol {
-    associatedtype OuterAction
-    associatedtype InnerAction
+    static func set(state: Model, inner: ViewModel) -> Model
 
     /// Tag an inner action, transforming it into an outer action
-    static func tag(_ action: InnerAction) -> OuterAction
+    static func tag(_ action: ViewModel.Action) -> Model.Action
 }
 
-/// A cursor combines a lens and a taggable action to provide a complete
-/// description of how to map from one component domain to another.
-public protocol CursorProtocol: LensProtocol, TaggableActionProtocol {}
-
-public extension CursorProtocol {
+extension CursorProtocol {
     /// Update an outer state through a cursor.
     /// CursorProtocol.update offers a convenient way to call child
     /// update functions from the parent domain, and get parent-domain
     /// states and actions back from it.
     ///
-    /// - `with` the inner update function to use
     /// - `state` the outer state
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - Returns a new outer state
-    static func update<Environment>(
-        with update: (
-            InnerState,
-            InnerAction,
-            Environment
-        ) -> Update<InnerState, InnerAction>,
-        state: OuterState,
-        action innerAction: InnerAction,
-        environment: Environment
-    ) -> Update<OuterState, OuterAction> {
-        let next = update(get(state: state), innerAction, environment)
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment: ViewModel.Environment
+    ) -> Update<Model> {
+        let next = ViewModel.update(
+            state: get(state: state),
+            action: viewAction,
+            environment: environment
+        )
         return Update(
             state: set(state: state, inner: next.state),
             fx: next.fx.map(tag).eraseToAnyPublisher(),
@@ -293,49 +275,40 @@ public extension CursorProtocol {
 //  I suspect this has something to do with either the guts of SwiftUI or the
 //  guts of UIViewRepresentable.
 //  2022-06-12 Gordon Brander
-public struct ViewStore<State, Action>: StoreProtocol, Equatable
-where State: Equatable
+public struct ViewStore<ViewModel>: StoreProtocol
+where ViewModel: ModelProtocol
 {
-    public static func == (
-        lhs: ViewStore<State, Action>,
-        rhs: ViewStore<State, Action>
-    ) -> Bool {
-        lhs.state == rhs.state
-    }
-
-    private let _get: () -> State
-    private let _send: (Action) -> Void
+    private let _get: () -> ViewModel
+    private let _send: (ViewModel.Action) -> Void
 
     /// Initialize a ViewStore using a get and send closure.
     public init(
-        get: @escaping () -> State,
-        send: @escaping (Action) -> Void
+        get: @escaping () -> ViewModel,
+        send: @escaping (ViewModel.Action) -> Void
     ) {
         self._get = get
         self._send = send
     }
 
     /// Get current state
-    public var state: State { self._get() }
+    public var state: ViewModel { self._get() }
 
     /// Send an action
-    public func send(_ action: Action) {
+    public func send(_ action: ViewModel.Action) {
         self._send(action)
     }
 }
 
-public extension ViewStore {
+extension ViewStore {
     /// Initialize a ViewStore from a store of some type, and a cursor.
     /// - Store can be any type conforming to `StoreProtocol`
     /// - Cursor can be any type conforming to `CursorProtocol`
-    init<Store, Cursor>(store: Store, cursor: Cursor.Type)
+    public init<Store, Cursor>(store: Store, cursor: Cursor.Type)
     where
         Store: StoreProtocol,
         Cursor: CursorProtocol,
-        Store.State == Cursor.OuterState,
-        Store.Action == Cursor.OuterAction,
-        State == Cursor.InnerState,
-        Action == Cursor.InnerAction
+        Store.Model == Cursor.Model,
+        ViewModel == Cursor.ViewModel
     {
         self.init(
             get: { Cursor.get(state: store.state) },
@@ -344,28 +317,28 @@ public extension ViewStore {
     }
 }
 
-public extension ViewStore {
+extension ViewStore {
     /// Create a ViewStore for a constant state that swallows actions.
     /// Convenience for view previews.
-    static func constant(
-        state: State
-    ) -> ViewStore<State, Action> {
-        ViewStore<State, Action>(
+    public static func constant(
+        state: ViewModel
+    ) -> ViewStore<ViewModel> {
+        ViewStore<ViewModel>(
             get: { state },
             send: { action in }
         )
     }
 }
 
-public extension Binding {
+extension Binding {
     /// Initialize a Binding from a store.
     /// - `get` reads the store state to a binding value.
     /// - `tag` transforms the value into an action.
     /// - Returns a binding suitable for use in a vanilla SwiftUI view.
-    init<Store: StoreProtocol>(
+    public init<Store: StoreProtocol>(
         store: Store,
-        get: @escaping (Store.State) -> Value,
-        tag: @escaping (Value) -> Store.Action
+        get: @escaping (Store.Model) -> Value,
+        tag: @escaping (Value) -> Store.Model.Action
     ) {
         self.init(
             get: { get(store.state) },

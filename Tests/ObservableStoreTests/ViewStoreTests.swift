@@ -16,7 +16,7 @@ class TestsViewStore: XCTestCase {
         case setText(String)
     }
 
-    struct ParentModel: Equatable {
+    struct ParentModel: ModelProtocol {
         var child = ChildModel(text: "")
         var edits: Int = 0
 
@@ -24,24 +24,44 @@ class TestsViewStore: XCTestCase {
             state: ParentModel,
             action: ParentAction,
             environment: Void
-        ) -> Update<ParentModel, ParentAction> {
+        ) -> Update<ParentModel> {
             switch action {
             case .child(let action):
                 return ParentChildCursor.update(
-                    with: ChildModel.update,
                     state: state,
                     action: action,
                     environment: ()
                 )
             case .setText(let text):
                 var next = ParentChildCursor.update(
-                    with: ChildModel.update,
                     state: state,
                     action: .setText(text),
                     environment: ()
                 )
                 next.state.edits = next.state.edits + 1
                 return next
+            }
+        }
+    }
+
+    enum ChildAction: Hashable {
+        case setText(String)
+    }
+
+    struct ChildModel: ModelProtocol {
+        var text: String
+
+        static func update(
+            state: ChildModel,
+            action: ChildAction,
+            environment: Void
+        ) -> Update<ChildModel> {
+            switch action {
+            case .setText(let string):
+                var model = state
+                model.text = string
+                return Update(state: model)
+                    .animation(.default)
             }
         }
     }
@@ -65,28 +85,6 @@ class TestsViewStore: XCTestCase {
         }
     }
 
-    struct ChildModel: Hashable {
-        var text: String
-
-        static func update(
-            state: ChildModel,
-            action: ChildAction,
-            environment: Void
-        ) -> Update<ChildModel, ChildAction> {
-            switch action {
-            case .setText(let string):
-                var model = state
-                model.text = string
-                return Update(state: model)
-                    .animation(.default)
-            }
-        }
-    }
-
-    enum ChildAction: Hashable {
-        case setText(String)
-    }
-
     struct SimpleView: View {
         @Binding var text: String
 
@@ -97,12 +95,11 @@ class TestsViewStore: XCTestCase {
 
     func testViewStoreCursor() throws {
         let store = Store(
-            update: ParentModel.update,
             state: ParentModel(),
             environment: ()
         )
 
-        let viewStore: ViewStore<ChildModel, ChildAction> = ViewStore(
+        let viewStore: ViewStore<ChildModel> = ViewStore(
             store: store,
             cursor: ParentChildCursor.self
         )
@@ -125,12 +122,11 @@ class TestsViewStore: XCTestCase {
 
     func testViewStoreGetTag() throws {
         let store = Store(
-            update: ParentModel.update,
             state: ParentModel(),
             environment: ()
         )
 
-        let viewStore: ViewStore<ChildModel, ChildAction> = ViewStore(
+        let viewStore: ViewStore<ChildModel> = ViewStore(
             store: store,
             cursor: ParentChildCursor.self
         )
@@ -154,7 +150,6 @@ class TestsViewStore: XCTestCase {
     /// Test creating binding from a root Store
     func testStoreBinding() throws {
         let store = Store(
-            update: ParentModel.update,
             state: ParentModel(),
             environment: ()
         )
@@ -183,12 +178,11 @@ class TestsViewStore: XCTestCase {
     /// Test creating binding from a ViewStore
     func testViewStoreBinding() throws {
         let store = Store(
-            update: ParentModel.update,
             state: ParentModel(),
             environment: ()
         )
 
-        let viewStore: ViewStore<ChildModel, ChildAction> = ViewStore(
+        let viewStore: ViewStore<ChildModel> = ViewStore(
             store: store,
             cursor: ParentChildCursor.self
         )
@@ -220,7 +214,6 @@ class TestsViewStore: XCTestCase {
 
     func testCursorUpdateTransaction() throws {
         let update = ParentChildCursor.update(
-            with: ChildModel.update,
             state: ParentModel(),
             action: ChildAction.setText("Foo"),
             environment: ()
