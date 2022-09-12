@@ -73,6 +73,68 @@ final class ObservableStoreTests: XCTestCase {
         self.cancellables = Set()
     }
 
+    func testPublishedPropertyFires() throws {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+
+        var count = 0
+        store.objectWillChange
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
+
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                3,
+                "publisher fires when state changes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    func testPublishedPropertyNoFireForSameState() throws {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+
+        var count = 0
+        store.objectWillChange
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.setCount(1))
+        store.send(.setCount(1))
+        store.send(.setCount(1))
+
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                1,
+                "publisher does not fire when state does not change"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
     func testStateAdvance() throws {
         let store = Store(
             state: AppModel(),
