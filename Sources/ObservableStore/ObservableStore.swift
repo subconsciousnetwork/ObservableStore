@@ -12,8 +12,7 @@ public typealias Fx<Action> = AnyPublisher<Action, Never>
 
 /// Update represents a `State` change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<State, Action>
-where State: Equatable {
+public struct Update<State, Action> {
     /// `State` for this update
     public var state: State
     /// `Fx` for this update.
@@ -81,22 +80,13 @@ where State: Equatable {
 /// - get an equatable `state`
 /// - `send` actions
 /// Stores are equatable, meaning you can also use them with `EquatableView`.
-public protocol StoreProtocol: Equatable {
-    associatedtype State: Equatable
+public protocol StoreProtocol {
+    associatedtype State
     associatedtype Action
 
     var state: State { get }
 
     func send(_ action: Action) -> Void
-}
-
-public extension StoreProtocol {
-    static func == (
-        lhs: Self,
-        rhs: Self
-    ) -> Bool {
-        lhs.state == rhs.state
-    }
 }
 
 /// Store is a source of truth for a state.
@@ -107,8 +97,18 @@ public extension StoreProtocol {
 /// Store has a `@Published` `state` (typically a struct).
 /// All updates and effects to this state happen through actions
 /// sent to `store.send`.
-public final class Store<State, Action, Environment>: ObservableObject, StoreProtocol
-where State: Equatable {
+public final class Store<State, Action, Environment>:
+    ObservableObject, StoreProtocol, Equatable
+where
+    State: Equatable
+{
+    public static func == (
+        lhs: Store<State, Action, Environment>,
+        rhs: Store<State, Action, Environment>
+    ) -> Bool {
+        lhs.state == rhs.state
+    }
+
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Current state.
@@ -293,9 +293,16 @@ public extension CursorProtocol {
 //  I suspect this has something to do with either the guts of SwiftUI or the
 //  guts of UIViewRepresentable.
 //  2022-06-12 Gordon Brander
-public struct ViewStore<State, Action>: StoreProtocol
+public struct ViewStore<State, Action>: StoreProtocol, Equatable
 where State: Equatable
 {
+    public static func == (
+        lhs: ViewStore<State, Action>,
+        rhs: ViewStore<State, Action>
+    ) -> Bool {
+        lhs.state == rhs.state
+    }
+
     private let _get: () -> State
     private let _send: (Action) -> Void
 
