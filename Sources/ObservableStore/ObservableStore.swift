@@ -90,8 +90,8 @@ public protocol StoreProtocol: Equatable {
     func send(_ action: Action) -> Void
 }
 
-extension StoreProtocol {
-    public static func == (
+public extension StoreProtocol {
+    static func == (
         lhs: Self,
         rhs: Self
     ) -> Bool {
@@ -251,7 +251,7 @@ public protocol TaggableActionProtocol {
 /// description of how to map from one component domain to another.
 public protocol CursorProtocol: LensProtocol, TaggableActionProtocol {}
 
-extension CursorProtocol {
+public extension CursorProtocol {
     /// Update an outer state through a cursor.
     /// CursorProtocol.update offers a convenient way to call child
     /// update functions from the parent domain, and get parent-domain
@@ -262,7 +262,7 @@ extension CursorProtocol {
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - Returns a new outer state
-    public static func update<Environment>(
+    static func update<Environment>(
         with update: (
             InnerState,
             InnerAction,
@@ -293,7 +293,7 @@ extension CursorProtocol {
 //  I suspect this has something to do with either the guts of SwiftUI or the
 //  guts of UIViewRepresentable.
 //  2022-06-12 Gordon Brander
-public struct ViewStore<State, Action>: StoreProtocol, Equatable
+public struct ViewStore<State, Action>: StoreProtocol
 where State: Equatable
 {
     private let _get: () -> State
@@ -317,26 +317,11 @@ where State: Equatable
     }
 }
 
-extension ViewStore {
-    /// Initialize a ViewStore from a store of some type, and a get and tag
-    /// function.
-    /// - Store can be any type conforming to `StoreProtocol`
-    /// - `get` and `tag` can be any closure.
-    public init<Store: StoreProtocol>(
-        store: Store,
-        get: @escaping (Store.State) -> State,
-        tag: @escaping (Action) -> Store.Action
-    ) {
-        self.init(
-            get: { get(store.state) },
-            send: { action in store.send(tag(action)) }
-        )
-    }
-
+public extension ViewStore {
     /// Initialize a ViewStore from a store of some type, and a cursor.
     /// - Store can be any type conforming to `StoreProtocol`
     /// - Cursor can be any type conforming to `CursorProtocol`
-    public init<Store, Cursor>(store: Store, cursor: Cursor.Type)
+    init<Store, Cursor>(store: Store, cursor: Cursor.Type)
     where
         Store: StoreProtocol,
         Cursor: CursorProtocol,
@@ -352,10 +337,10 @@ extension ViewStore {
     }
 }
 
-extension ViewStore {
+public extension ViewStore {
     /// Create a ViewStore for a constant state that swallows actions.
     /// Convenience for view previews.
-    public static func constant(
+    static func constant(
         state: State
     ) -> ViewStore<State, Action> {
         ViewStore<State, Action>(
@@ -365,12 +350,12 @@ extension ViewStore {
     }
 }
 
-extension Binding {
+public extension Binding {
     /// Initialize a Binding from a store.
     /// - `get` reads the store state to a binding value.
     /// - `tag` transforms the value into an action.
     /// - Returns a binding suitable for use in a vanilla SwiftUI view.
-    public init<Store: StoreProtocol>(
+    init<Store: StoreProtocol>(
         store: Store,
         get: @escaping (Store.State) -> Value,
         tag: @escaping (Value) -> Store.Action

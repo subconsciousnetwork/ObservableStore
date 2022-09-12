@@ -132,8 +132,7 @@ class TestsViewStore: XCTestCase {
 
         let viewStore: ViewStore<ChildModel, ChildAction> = ViewStore(
             store: store,
-            get: { state in state.child },
-            tag: ParentChildCursor.tag
+            cursor: ParentChildCursor.self
         )
 
         viewStore.send(.setText("Foo"))
