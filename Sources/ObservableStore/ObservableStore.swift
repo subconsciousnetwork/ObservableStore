@@ -93,22 +93,12 @@ where Model: ModelProtocol {
 /// A store is any type that can
 /// - get an equatable `state`
 /// - `send` actions
-/// Stores are equatable, meaning you can also use them with `EquatableView`.
-public protocol StoreProtocol: Equatable {
+public protocol StoreProtocol {
     associatedtype Model: ModelProtocol
 
     var state: Model { get }
 
     func send(_ action: Model.Action) -> Void
-}
-
-extension StoreProtocol {
-    public static func == (
-        lhs: Self,
-        rhs: Self
-    ) -> Bool {
-        lhs.state == rhs.state
-    }
 }
 
 /// Store is a source of truth for a state.
