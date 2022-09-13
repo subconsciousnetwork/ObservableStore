@@ -25,8 +25,7 @@ public protocol ModelProtocol: Equatable {
 
 /// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<Model>
-where Model: ModelProtocol {
+public struct Update<Model: ModelProtocol> {
     /// `State` for this update
     public var state: Model
     /// `Fx` for this update.
@@ -275,9 +274,7 @@ extension CursorProtocol {
 //  I suspect this has something to do with either the guts of SwiftUI or the
 //  guts of UIViewRepresentable.
 //  2022-06-12 Gordon Brander
-public struct ViewStore<ViewModel>: StoreProtocol
-where ViewModel: ModelProtocol
-{
+public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     private let _get: () -> ViewModel
     private let _send: (ViewModel.Action) -> Void
 
