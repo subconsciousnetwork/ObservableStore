@@ -332,7 +332,7 @@ struct AppModel: ModelProtocol {
         environment: AppEnvironment
     ) -> Update<AppModel> {
         switch {
-        case .child(action):
+        case .child(let action):
             return AppChildCursor.update(
                 state: state,
                 action: action,
