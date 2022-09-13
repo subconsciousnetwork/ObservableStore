@@ -90,8 +90,8 @@ public struct Update<Model: ModelProtocol> {
 }
 
 /// A store is any type that can
-/// - get an equatable `state`
-/// - `send` actions
+/// - get a state
+/// - send actions
 public protocol StoreProtocol {
     associatedtype Model: ModelProtocol
 
