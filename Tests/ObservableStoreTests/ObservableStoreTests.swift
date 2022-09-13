@@ -1,10 +1,11 @@
 import XCTest
 import Combine
+import SwiftUI
 @testable import ObservableStore
 
 final class ObservableStoreTests: XCTestCase {
     /// App state
-    struct AppState: Equatable {
+    struct AppModel: ModelProtocol {
         enum Action {
             case increment
             case delayIncrement(Double)
@@ -28,10 +29,10 @@ final class ObservableStoreTests: XCTestCase {
 
         /// State update function
         static func update(
-            state: Self,
+            state: AppModel,
             action: Action,
             environment: Environment
-        ) -> Update<Self, Action> {
+        ) -> Update<AppModel> {
             switch action {
             case .increment:
                 var model = state
@@ -65,6 +66,14 @@ final class ObservableStoreTests: XCTestCase {
         var editor = Editor()
     }
 
+    struct SimpleCountView: View {
+        @Binding var count: Int
+
+        var body: some View {
+            Text("Count: \(count)")
+        }
+    }
+
     var cancellables = Set<AnyCancellable>()
 
     override func setUp() {
@@ -74,9 +83,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testStateAdvance() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
 
         store.send(.increment)
@@ -85,27 +93,30 @@ final class ObservableStoreTests: XCTestCase {
 
     func testBinding() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
-        let binding = store.binding(
-            get: \.count,
-            tag: AppState.Action.setCount
+        let view = SimpleCountView(
+            count: Binding(
+                store: store,
+                get: \.count,
+                tag: AppModel.Action.setCount
+            )
         )
-        binding.wrappedValue = 2
-        XCTAssertEqual(store.state.count, 2, "binding sends action")
+        view.count = 2
+        XCTAssertEqual(view.count, 2, "binding is set")
+        XCTAssertEqual(store.state.count, 2, "binding sends action to store")
     }
 
     func testDeepBinding() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
-        let binding = store.binding(
+        let binding = Binding(
+            store: store,
             get: \.editor,
-            tag: AppState.Action.setEditor
+            tag: AppModel.Action.setEditor
         )
         .input
         .text
@@ -119,9 +130,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testEmptyFxRemovedOnComplete() {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         store.send(.increment)
         store.send(.increment)
@@ -142,9 +152,8 @@ final class ObservableStoreTests: XCTestCase {
 
     func testAsyncFxRemovedOnComplete() {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
         store.send(.delayIncrement(0.1))
         store.send(.delayIncrement(0.2))
@@ -162,44 +171,73 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.5)
     }
 
-    func testStateOnlySetWhenNotEqual() {
+    func testPublishedPropertyFires() throws {
         let store = Store(
-            update: AppState.update,
-            state: AppState(),
-            environment: AppState.Environment()
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
+
+        var count = 0
+        store.$state
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
 
         let expectation = XCTestExpectation(
-            description: "check that equal states are not set"
+            description: "publisher fires when state changes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                4,
+                "publisher fires when state changes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.2)
+    }
+
+    func testStateOnlySetWhenNotEqual() {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
         )
 
-        var stateFires = 0
+        var count = 0
         store.$state
-            .timeout(.seconds(0.1), scheduler: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { value in
-                    XCTAssertEqual(
-                        stateFires,
-                        2,
-                        "Equal states are not set. $state only fires for new states."
-                    )
-                    expectation.fulfill()
-                },
-                receiveValue: { value in
-                    stateFires = stateFires + 1
-                }
-            )
-            .store(in: &self.cancellables)
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
 
+        let expectation = XCTestExpectation(
+            description: "publisher does not fire when state does not change"
+        )
+        DispatchQueue.main.async {
+            // Publisher should fire twice: once for initial state,
+            // once for state change.
+            XCTAssertEqual(
+                count,
+                2,
+                "publisher does not fire when state does not change"
+            )
+            expectation.fulfill()
+        }
         wait(for: [expectation], timeout: 0.2)
     }
 
     /// Definition for app to test updates
-    struct TestUpdateMergeFxState: Equatable {
+    struct TestUpdateMergeFxState: ModelProtocol {
         enum Action {
             case setTitleAndSubtitleViaMergeFx(
                 title: String,
@@ -216,7 +254,7 @@ final class ObservableStoreTests: XCTestCase {
             state: Self,
             action: Action,
             environment: Environment
-        ) -> Update<Self, Action> {
+        ) -> Update<Self> {
             switch action {
             case .setTitle(let title):
                 var model = state
@@ -245,7 +283,6 @@ final class ObservableStoreTests: XCTestCase {
     
     func testUpdateMergeFx() {
         let store = Store(
-            update: TestUpdateMergeFxState.update,
             state: TestUpdateMergeFxState(),
             environment: TestUpdateMergeFxState.Environment()
         )

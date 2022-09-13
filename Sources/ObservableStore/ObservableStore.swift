@@ -10,15 +10,27 @@ import SwiftUI
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 
-/// Update represents a `State` change, together with an `Fx` publisher,
+/// A model is an equatable type that knows how to create
+/// state `Updates` for itself via a static update function.
+public protocol ModelProtocol: Equatable {
+    associatedtype Action
+    associatedtype Environment
+
+    static func update(
+        state: Self,
+        action: Action,
+        environment: Environment
+    ) -> Update<Self>
+}
+
+/// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<State, Action>
-where State: Equatable {
+public struct Update<Model: ModelProtocol> {
     /// `State` for this update
-    public var state: State
+    public var state: Model
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
-    public var fx: Fx<Action>
+    public var fx: Fx<Model.Action>
     /// The transaction that should be set during this update.
     /// Store uses this value to set the transaction while updating state,
     /// allowing you to drive explicit animations from your update function.
@@ -28,8 +40,8 @@ where State: Equatable {
     public var transaction: Transaction?
 
     public init(
-        state: State,
-        fx: Fx<Action> = Empty(completeImmediately: true)
+        state: Model,
+        fx: Fx<Model.Action> = Empty(completeImmediately: true)
             .eraseToAnyPublisher(),
         transaction: Transaction? = nil
     ) {
@@ -40,7 +52,7 @@ where State: Equatable {
 
     /// Merge existing fx together with new fx.
     /// - Returns a new `Update`
-    public func mergeFx(_ fx: Fx<Action>) -> Update<State, Action> {
+    public func mergeFx(_ fx: Fx<Model.Action>) -> Update<Model> {
         var this = self
         this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
         return this
@@ -65,7 +77,7 @@ where State: Equatable {
     ///
     /// - Returns a new `Update`
     public func pipe(
-        _ through: (State) -> Self
+        _ through: (Model) -> Self
     ) -> Self {
         let next = through(self.state)
         let fx = self.fx.merge(with: next.fx).eraseToAnyPublisher()
@@ -77,6 +89,17 @@ where State: Equatable {
     }
 }
 
+/// A store is any type that can
+/// - get a state
+/// - send actions
+public protocol StoreProtocol {
+    associatedtype Model: ModelProtocol
+
+    var state: Model { get }
+
+    func send(_ action: Model.Action) -> Void
+}
+
 /// Store is a source of truth for a state.
 ///
 /// Store is an `ObservableObject`. You can use it in a view via
@@ -85,36 +108,14 @@ where State: Equatable {
 /// Store has a `@Published` `state` (typically a struct).
 /// All updates and effects to this state happen through actions
 /// sent to `store.send`.
-///
-/// Store is meant to be used as part of a single app-wide, or
-/// major-view-wide component. Store deliberately does not solve for nested
-/// components or nested stores. Following Elm, deeply nested components
-/// are avoided. Instead, an app should use a single store, or perhaps one
-/// store per major view. Components should not have to communicate with
-/// each other. If nested components do have to communicate, it is
-/// probably a sign they should be the same component with a shared store.
-///
-/// Instead of decomposing an app into components, we decompose the app into
-/// views that share the same store and actions. Sub-views should be either
-/// stateless, consuming bare properties of `store.state`, or take bindings,
-/// which can be created with `store.binding`.
-///
-/// See https://guide.elm-lang.org/architecture/
-/// and https://guide.elm-lang.org/webapps/structure.html
-/// for more about this approach.
-public final class Store<State, Action, Environment>: ObservableObject
-where State: Equatable {
+public final class Store<Model>: ObservableObject, StoreProtocol
+where Model: ModelProtocol
+{
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
-    @Published public private(set) var state: State
-    /// Update function for state
-    public var update: (
-        State,
-        Action,
-        Environment
-    ) -> Update<State, Action>
+    @Published public private(set) var state: Model
     /// Environment, which typically holds references to outside information,
     /// such as API methods.
     ///
@@ -129,53 +130,14 @@ where State: Equatable {
     /// Store will hold on to the resulting `fx` publisher until it completes,
     /// which in the case of long-lived services, could be until the
     /// app is stopped.
-    public var environment: Environment
+    public var environment: Model.Environment
 
     public init(
-        update: @escaping (
-            State,
-            Action,
-            Environment
-        ) -> Update<State, Action>,
-        state: State,
-        environment: Environment
+        state: Model,
+        environment: Model.Environment
     ) {
-        self.update = update
         self.state = state
         self.environment = environment
-    }
-
-    /// Create a binding that can update the store.
-    /// Sets send actions to the store, rather than setting values directly.
-    public func binding<Value>(
-        get: @escaping (State) -> Value,
-        tag: @escaping (Value) -> Action
-    ) -> Binding<Value> {
-        Binding(
-            get: { get(self.state) },
-            set: { value in
-                self.send(tag(value))
-            }
-        )
-    }
-
-    /// Create a binding that can update the store.
-    /// Sets send actions to the store, rather than setting values directly.
-    /// Optional `animation` parameter allows you to trigger an animation
-    /// for binding sets.
-    public func binding<Value>(
-        get: @escaping (State) -> Value,
-        tag: @escaping (Value) -> Action,
-        animation: Animation?
-    ) -> Binding<Value> {
-        Binding(
-            get: { get(self.state) },
-            set: { value in
-                withAnimation(animation) {
-                    self.send(tag(value))
-                }
-            }
-        )
     }
 
     /// Subscribe to a publisher of actions, piping them through to
@@ -183,7 +145,7 @@ where State: Equatable {
     ///
     /// Holds on to the cancellable until publisher completes.
     /// When publisher completes, removes cancellable.
-    public func subscribe(to fx: Fx<Action>) {
+    public func subscribe(to fx: Fx<Model.Action>) {
         // Create a UUID for the cancellable.
         // Store cancellable in dictionary by UUID.
         // Remove cancellable from dictionary upon effect completion.
@@ -191,33 +153,25 @@ where State: Equatable {
         // the effect, and then removes it, so we don't have a cancellables
         // memory leak.
         let id = UUID()
-        // Receive Fx on main thread. This does two important things:
-        //
-        // First, SwiftUI requires that any state mutations that would change
-        // views happen on the main thread. Receiving on main ensures that
-        // all fx-driven state transitions happen on main, even if the
-        // publisher is off-main-thread.
-        //
-        // Second, if we didn't schedule receive on main, it would be possible
-        // for publishers to complete immediately, causing receiveCompletion
-        // to attempt to remove the publisher from `cancellables` before
-        // it is added. By scheduling to receive publisher on main,
-        // we force publisher to complete on next tick, ensuring that it
-        // is always first added, then removed from `cancellables`.
+
+        // Did fx complete immediately?
+        // We use this flag to deal with a race condition where
+        // an effect can complete before it is added to cancellables,
+        // meaking receiveCompletion tries to clean it up before it is added.
+        var didComplete = false
         let cancellable = fx
-            .receive(
-                on: DispatchQueue.main,
-                options: .init(qos: .userInteractive)
-            )
             .sink(
                 receiveCompletion: { [weak self] _ in
+                    didComplete = true
                     self?.cancellables.removeValue(forKey: id)
                 },
                 receiveValue: { [weak self] action in
                     self?.send(action)
                 }
             )
-        self.cancellables[id] = cancellable
+        if !didComplete {
+            self.cancellables[id] = cancellable
+        }
     }
 
     /// Send an action to the store to update state and generate effects.
@@ -230,9 +184,13 @@ where State: Equatable {
     /// However it also means that publishers which run off-main-thread MUST
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
-    public func send(_ action: Action) {
+    public func send(_ action: Model.Action) {
         // Generate next state and effect
-        let next = update(self.state, action, self.environment)
+        let next = Model.update(
+            state: self.state,
+            action: action,
+            environment: self.environment
+        )
         // Set `state` if changed.
         //
         // Mutating state (a `@Published` property) will fire `objectWillChange`
@@ -257,5 +215,131 @@ where State: Equatable {
         }
         // Run effect
         self.subscribe(to: next.fx)
+    }
+}
+
+/// A cursor provides a complete description of how to map from one component
+/// domain to another.
+public protocol CursorProtocol {
+    associatedtype Model: ModelProtocol
+    associatedtype ViewModel: ModelProtocol
+
+    /// Get an inner state from an outer state
+    static func get(state: Model) -> ViewModel
+
+    /// Set an inner state on an outer state, returning an outer state
+    static func set(state: Model, inner: ViewModel) -> Model
+
+    /// Tag an inner action, transforming it into an outer action
+    static func tag(_ action: ViewModel.Action) -> Model.Action
+}
+
+extension CursorProtocol {
+    /// Update an outer state through a cursor.
+    /// CursorProtocol.update offers a convenient way to call child
+    /// update functions from the parent domain, and get parent-domain
+    /// states and actions back from it.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - Returns a new outer state
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment: ViewModel.Environment
+    ) -> Update<Model> {
+        let next = ViewModel.update(
+            state: get(state: state),
+            action: viewAction,
+            environment: environment
+        )
+        return Update(
+            state: set(state: state, inner: next.state),
+            fx: next.fx.map(tag).eraseToAnyPublisher(),
+            transaction: next.transaction
+        )
+    }
+}
+
+/// ViewStore is a local projection of a Store that can be passed down to
+/// a child view.
+//  NOTE: ViewStore works like Binding. It reads state at runtime using a
+//  getter closure that you provide. It is important that we
+//  read the state via a closure, like Binding does, rather than
+//  storing the literal value as a property of the instance.
+//  If you store the literal value as a property, you will have "liveness"
+//  issues with the data in views, especially around things like text editors.
+//  Letters entered out of order, old states showing up, etc.
+//  I suspect this has something to do with either the guts of SwiftUI or the
+//  guts of UIViewRepresentable.
+//  2022-06-12 Gordon Brander
+public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
+    private let _get: () -> ViewModel
+    private let _send: (ViewModel.Action) -> Void
+
+    /// Initialize a ViewStore using a get and send closure.
+    public init(
+        get: @escaping () -> ViewModel,
+        send: @escaping (ViewModel.Action) -> Void
+    ) {
+        self._get = get
+        self._send = send
+    }
+
+    /// Get current state
+    public var state: ViewModel { self._get() }
+
+    /// Send an action
+    public func send(_ action: ViewModel.Action) {
+        self._send(action)
+    }
+}
+
+extension ViewStore {
+    /// Initialize a ViewStore from a store of some type, and a cursor.
+    /// - Store can be any type conforming to `StoreProtocol`
+    /// - Cursor can be any type conforming to `CursorProtocol`
+    public init<Store, Cursor>(store: Store, cursor: Cursor.Type)
+    where
+        Store: StoreProtocol,
+        Cursor: CursorProtocol,
+        Store.Model == Cursor.Model,
+        ViewModel == Cursor.ViewModel
+    {
+        self.init(
+            get: { Cursor.get(state: store.state) },
+            send: { action in store.send(Cursor.tag(action)) }
+        )
+    }
+}
+
+extension ViewStore {
+    /// Create a ViewStore for a constant state that swallows actions.
+    /// Convenience for view previews.
+    public static func constant(
+        state: ViewModel
+    ) -> ViewStore<ViewModel> {
+        ViewStore<ViewModel>(
+            get: { state },
+            send: { action in }
+        )
+    }
+}
+
+extension Binding {
+    /// Initialize a Binding from a store.
+    /// - `get` reads the store state to a binding value.
+    /// - `tag` transforms the value into an action.
+    /// - Returns a binding suitable for use in a vanilla SwiftUI view.
+    public init<Store: StoreProtocol>(
+        store: Store,
+        get: @escaping (Store.Model) -> Value,
+        tag: @escaping (Value) -> Store.Model.Action
+    ) {
+        self.init(
+            get: { get(store.state) },
+            set: { value in store.send(tag(value)) }
+        )
     }
 }
