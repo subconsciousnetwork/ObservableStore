@@ -66,6 +66,14 @@ final class ObservableStoreTests: XCTestCase {
         var editor = Editor()
     }
 
+    struct SimpleCountView: View {
+        @Binding var count: Int
+
+        var body: some View {
+            Text("Count: \(count)")
+        }
+    }
+
     var cancellables = Set<AnyCancellable>()
 
     override func setUp() {
@@ -88,13 +96,16 @@ final class ObservableStoreTests: XCTestCase {
             state: AppModel(),
             environment: AppModel.Environment()
         )
-        let binding = Binding(
-            store: store,
-            get: \.count,
-            tag: AppModel.Action.setCount
+        let view = SimpleCountView(
+            count: Binding(
+                store: store,
+                get: \.count,
+                tag: AppModel.Action.setCount
+            )
         )
-        binding.wrappedValue = 2
-        XCTAssertEqual(store.state.count, 2, "binding sends action")
+        view.count = 2
+        XCTAssertEqual(view.count, 2, "binding is set")
+        XCTAssertEqual(store.state.count, 2, "binding sends action to store")
     }
 
     func testDeepBinding() throws {

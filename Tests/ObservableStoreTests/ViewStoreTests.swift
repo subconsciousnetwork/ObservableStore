@@ -147,34 +147,6 @@ class TestsViewStore: XCTestCase {
         )
     }
 
-    /// Test creating binding from a root Store
-    func testStoreBinding() throws {
-        let store = Store(
-            state: ParentModel(),
-            environment: ()
-        )
-
-        let binding = Binding(
-            store: store,
-            get: \.child.text,
-            tag: ParentAction.setText
-        )
-
-        let view = SimpleView(text: binding)
-
-        view.text = "Foo"
-        view.text = "Bar"
-
-        XCTAssertEqual(
-            store.state.child.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
-    }
-
     /// Test creating binding from a ViewStore
     func testViewStoreBinding() throws {
         let store = Store(
