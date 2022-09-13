@@ -73,68 +73,6 @@ final class ObservableStoreTests: XCTestCase {
         self.cancellables = Set()
     }
 
-    func testPublishedPropertyFires() throws {
-        let store = Store(
-            state: AppModel(),
-            environment: AppModel.Environment()
-        )
-
-        var count = 0
-        store.objectWillChange
-            .sink(receiveValue: { _ in
-                count = count + 1
-            })
-            .store(in: &cancellables)
-
-        store.send(.increment)
-        store.send(.increment)
-        store.send(.increment)
-
-        let expectation = XCTestExpectation(
-            description: "cancellable removed when publisher completes"
-        )
-        DispatchQueue.main.async {
-            XCTAssertEqual(
-                count,
-                3,
-                "publisher fires when state changes"
-            )
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 0.1)
-    }
-
-    func testPublishedPropertyNoFireForSameState() throws {
-        let store = Store(
-            state: AppModel(),
-            environment: AppModel.Environment()
-        )
-
-        var count = 0
-        store.objectWillChange
-            .sink(receiveValue: { _ in
-                count = count + 1
-            })
-            .store(in: &cancellables)
-
-        store.send(.setCount(1))
-        store.send(.setCount(1))
-        store.send(.setCount(1))
-
-        let expectation = XCTestExpectation(
-            description: "cancellable removed when publisher completes"
-        )
-        DispatchQueue.main.async {
-            XCTAssertEqual(
-                count,
-                1,
-                "publisher does not fire when state does not change"
-            )
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 0.1)
-    }
-
     func testStateAdvance() throws {
         let store = Store(
             state: AppModel(),
@@ -222,38 +160,68 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.5)
     }
 
+    func testPublishedPropertyFires() throws {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+
+        var count = 0
+        store.$state
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
+
+        let expectation = XCTestExpectation(
+            description: "publisher fires when state changes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                count,
+                4,
+                "publisher fires when state changes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.2)
+    }
+
     func testStateOnlySetWhenNotEqual() {
         let store = Store(
             state: AppModel(),
             environment: AppModel.Environment()
         )
 
-        let expectation = XCTestExpectation(
-            description: "check that equal states are not set"
-        )
-
-        var stateFires = 0
+        var count = 0
         store.$state
-            .timeout(.seconds(0.1), scheduler: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { value in
-                    XCTAssertEqual(
-                        stateFires,
-                        2,
-                        "Equal states are not set. $state only fires for new states."
-                    )
-                    expectation.fulfill()
-                },
-                receiveValue: { value in
-                    stateFires = stateFires + 1
-                }
-            )
-            .store(in: &self.cancellables)
+            .sink(receiveValue: { _ in
+                count = count + 1
+            })
+            .store(in: &cancellables)
+
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
 
+        let expectation = XCTestExpectation(
+            description: "publisher does not fire when state does not change"
+        )
+        DispatchQueue.main.async {
+            // Publisher should fire twice: once for initial state,
+            // once for state change.
+            XCTAssertEqual(
+                count,
+                2,
+                "publisher does not fire when state does not change"
+            )
+            expectation.fulfill()
+        }
         wait(for: [expectation], timeout: 0.2)
     }
 
