@@ -4,13 +4,13 @@ A simple Elm-like Store for SwiftUI, based on [ObservableObject](https://develop
 
 ObservableStore helps you craft more reliable apps by centralizing all of your application state into one place, and giving you a deterministic system for managing state changes and side-effects. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order. If you’ve ever used [Elm](https://guide.elm-lang.org/architecture/) or [Redux](https://redux.js.org/), you get the gist.
 
-Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), it can be used anywhere in SwiftUI that ObservableObject would be used.
+Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can be used anywhere in SwiftUI that ObservableObject would be used.
 
-Store can be used as a single shared [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or you can pass scoped parts of store down to sub-view through:
+You can use Store as a single shared [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or you can pass scoped parts of store down to sub-view through:
 
 - Bare properties of `store.state`
 - Ordinary SwiftUI bindings
-- ViewStores that that provide a component-scoped store for an underlying parent store.
+- ViewStores that that offer a scoped view over an underlying shared parent store.
 
 ## Example
 
@@ -30,16 +30,18 @@ enum AppAction {
 struct AppEnvironment {
 }
 
-/// App state
-struct AppState: Equatable {
+/// Conform your model to `ModelProtocol`.
+/// A `ModelProtocol` is any `Equatable` that has a static update function
+/// like the one below.
+struct AppModel: ModelProtocol {
     var count = 0
 
-    /// State update function
+    /// Update function
     static func update(
-        state: AppState,
+        state: AppModel,
         action: AppAction,
         environment: AppEnvironment
-    ) -> Update<AppState, AppAction> {
+    ) -> Update<AppModel> {
         switch action {
         case .increment:
             var model = state
@@ -51,8 +53,7 @@ struct AppState: Equatable {
 
 struct AppView: View {
     @StateObject var store = Store(
-        update: AppState.update,
-        state: AppState(),
+        state: AppModel(),
         environment: AppEnvironment()
     )
 
@@ -78,20 +79,37 @@ struct AppView: View {
 
 A `Store` is a source of truth for application state. It's an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), so you can use it anywhere in SwiftUI that you would use an ObservableObject—as an [@ObservedObject](https://developer.apple.com/documentation/swiftui/observedobject), a [@StateObject](https://developer.apple.com/documentation/swiftui/stateobject), or [@EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject).
 
-Store exposes a single [`@Published`](https://developer.apple.com/documentation/combine/published) property, `state`, which represents your application state. `state` is read-only, and cannot be updated directly. Instead, like Elm or Redux, all `state` changes happen through a single `update` function, with the signature:
+Store exposes a single [`@Published`](https://developer.apple.com/documentation/combine/published) property, `state`, which represents your application state. `state` can be any type that conforms to `ModelProtocol`.
 
-```
-(State, Action, Environment) -> Update<State, Action>
+`state` is read-only, and cannot be updated directly. Instead, all state changes are returned by an update function that you implement as part of `ModelProtocol`.
+
+```swift
+struct AppModel: ModelProtocol {
+    var count = 0
+
+    /// Update function
+    static func update(
+        state: AppModel,
+        action: AppAction,
+        environment: AppEnvironment
+    ) -> Update<AppModel> {
+        switch action {
+        case .increment:
+            var model = state
+            model.count = model.count + 1
+            return Update(state: model)
+        }
+    }
+}
 ```
 
 The `Update` returned is a small struct that contains a new state, plus any optional effects and animations associated with the state transition (more about that in a bit).
 
-`state` can be any [`Equatable`](https://developer.apple.com/documentation/swift/equatable) type, typically a struct. Before setting a new state, Store checks that it is not equal to the previous state. New states that are equal to old states are not set, making them a no-op. This means views only recalculate when the state actually changes. Additionally, because state is Equatable, you can make any view that relies on Store, or part of Store, an [EquatableView](https://developer.apple.com/documentation/swiftui/equatableview), so the view’s body will only be recalculated if the values it cares about change.
-
+`ModelProtocol` inherits from `Equatable`. Before setting a new state, Store checks that it is not equal to the previous state. New states that are equal to old states are not set, making them a no-op. This means views only recalculate when the state actually changes.
 
 ## Effects
 
- Updates are also able to produce asyncronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This lets you schedule asyncronous things like HTTP requests or database calls in response to actions. Using effects, you can model everything via a deterministic sequence of actions, even asyncronous side-effects.
+ Updates are also able to produce asynchronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This lets you schedule asynchronous things like HTTP requests or database calls in response to actions. Using effects, you can model everything via a deterministic sequence of actions, even asynchronous side-effects.
  
 Effects are modeled as [Combine Publishers](https://developer.apple.com/documentation/combine/publishers) which publish actions and never fail.
 
@@ -101,7 +119,7 @@ For convenience, ObservableStore defines a typealias for effect publishers:
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 ```
 
-The most common way to produce effects is by exposing methods on `Environment` that produce effects publishers. For example, an asyncronous call to an authentication API service might be implemented in `Environment`, where an effects publisher is used to signal whether authentication was successful.
+The most common way to produce effects is by exposing methods on `Environment` that produce effects publishers. For example, an asynchronous call to an authentication API service might be implemented in `Environment`, where an effects publisher is used to signal whether authentication was successful.
 
 ```swift
 struct Environment {
@@ -116,10 +134,10 @@ You can subscribe to an effects publisher by returning it as part of an Update:
 
 ```swift
 func update(
-    state: State,
+    state: Model,
     action: Action,
     environment: Environment
-) -> Update<State, Action> {
+) -> Update<Model> {
     switch action {
     // ...
     case .authenticate(let credentials):
@@ -141,10 +159,10 @@ Use `Update.animation` to set an explicit [Animation](https://developer.apple.co
 
 ```swift
 func update(
-    state: State,
+    state: Model,
     action: Action,
     environment: Environment
-) -> Update<State, Action> {
+) -> Update<Model> {
     switch action {
     // ...
     case .authenticate(let credentials):
@@ -175,7 +193,7 @@ Button("Set color to red") {
 
 ## Bindings
 
-`Binding(store:get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
+`Binding(store:get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
 
 ```swift
 TextField(
@@ -206,7 +224,7 @@ Bottom line, because Store is just an ordinary [ObservableObject](https://develo
 
 ## ViewStore
 
-ViewStore lets you create component-scoped stores from a shared parent store. This allows you to create apps from free-standing deterministic components that all have their own local state, actions, and update functions, but share the same underlying root store. You can think of ViewStore as like a binding, except that it exposes the same StoreProtocol API that Store does.
+ViewStore lets you create component-scoped stores from a shared root store. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store. You can think of ViewStore as like a binding, except that it exposes the same StoreProtocol API that Store does.
 
 Imagine we have a stand-alone child component that looks something like this:
 
@@ -215,14 +233,14 @@ enum ChildAction {
     case increment
 }
 
-struct ChildModel: Equatable {
+struct ChildModel: ModelProtocol {
     var count: Int = 0
 
     static func update(
         state: ChildModel,
         action: ChildAction,
         environment: Void
-    ) -> Update<ChildModel, ChildAction> {
+    ) -> Update<ChildModel> {
         switch action {
         case .increment:
             var model = state
@@ -233,7 +251,7 @@ struct ChildModel: Equatable {
 }
 
 struct ChildView: View {
-    var store: ViewStore<ChildModel, ChildAction>
+    var store: ViewStore<ChildModel>
 
     var body: some View {
         VStack {
@@ -249,11 +267,11 @@ struct ChildView: View {
 }
 ```
 
-Now we want to integrate this child component with other components that share the same root store. To create a ViewStore from the root store, we need to specify a way to map from this child component's state and actions to the root store state and actions. This is where `CursorProtocol` comes in. It defines three things:
+Now we want to integrate this child component with a parent component. To do this, we can create a ViewStore from the parent's root store. We just need to specify a way to map from this child component's state and actions to the root store state and actions. This is where `CursorProtocol` comes in. It defines three things:
 
-- A way to `get` a local state from the global state
-- A way to `set` a local state on a global state
-- A way to `tag` a local action so it becomes a global action
+- A way to `get` a local state from the root state
+- A way to `set` a local state on a root state
+- A way to `tag` a local action so it becomes a root action
 
 ```swift
 struct AppChildCursor: CursorProtocol {
@@ -283,7 +301,7 @@ struct AppChildCursor: CursorProtocol {
 
 ```swift
 struct ContentView: View {
-    @ObservedObject private var store: Store<AppModel, AppAction, AppEnvironment>
+    @ObservedObject private var store: Store<AppModel>
 
     var body: some View {
         ChildView(
@@ -296,27 +314,26 @@ struct ContentView: View {
 }
 ```
 
-ViewStores can also be created from other ViewStores, allowing for infinite hierarchical nesting of components.
+ViewStores can also be created from other ViewStores, allowing for hierarchical nesting of components.
 
-One more thing. Because cursors map or wrap child actions into parent actions, the parent update function must handle those actions. Cursors gives us a handy shortcut by synthesizing an `update` function that automatically maps child state and actions to parent state and actions.
+Now we just need to integrate our child component's update function with the root update function. Cursors gives us a handy shortcut by synthesizing an `update` function that automatically maps child state and actions to parent state and actions.
 
 ```swift
 enum AppAction {
     case child(ChildAction)
 }
 
-struct AppModel: Equatable {
+struct AppModel: ModelProtocol {
     var child = ChildModel()
 
     static func update(
         state: AppModel,
         action: AppAction,
         environment: AppEnvironment
-    ) -> Update<AppModel, AppAction> {
+    ) -> Update<AppModel> {
         switch {
         case .child(action):
             return AppChildCursor.update(
-                with: ChildModel.update,
                 state: state,
                 action: action,
                 environment: ()
@@ -326,6 +343,6 @@ struct AppModel: Equatable {
 }
 ```
 
-This tagging/update pattern gives parent components an opportunity to intercept and handle child actions in special ways.
+This tagging/update pattern also gives parent components an opportunity to intercept and handle child actions in special ways.
 
 That's it! You can get state and send actions from the ViewStore, just like any other store, and it will translate local state changes and fx into app-level state changes and fx. Using ViewStore you can compose an app from multiple stand-alone components that each describe their own domain model and update logic.
