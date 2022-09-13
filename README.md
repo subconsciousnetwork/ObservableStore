@@ -109,11 +109,9 @@ The `Update` returned is a small struct that contains a new state, plus any opti
 
 ## Effects
 
- Updates are also able to produce asynchronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This lets you schedule asynchronous things like HTTP requests or database calls in response to actions. Using effects, you can model everything via a deterministic sequence of actions, even asynchronous side-effects.
+ Updates are also able to produce asynchronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This gives you a deterministic way to schedule sync and async side-effects like HTTP requests or database calls in response to actions.
  
-Effects are modeled as [Combine Publishers](https://developer.apple.com/documentation/combine/publishers) which publish actions and never fail.
-
-For convenience, ObservableStore defines a typealias for effect publishers:
+Effects are modeled as [Combine Publishers](https://developer.apple.com/documentation/combine/publishers) which publish actions and never fail. For convenience, ObservableStore defines a typealias for effect publishers:
 
 ```swift
 public typealias Fx<Action> = AnyPublisher<Action, Never>
