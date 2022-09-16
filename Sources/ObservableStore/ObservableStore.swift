@@ -23,6 +23,37 @@ public protocol ModelProtocol: Equatable {
     ) -> Update<Self>
 }
 
+extension ModelProtocol {
+    /// Update state through a sequence of actions, merging fx.
+    /// - State updates happen immediately
+    /// - Fx are merged
+    /// - Last transaction wins
+    /// This function is useful for composing actions, or when dispatching
+    /// actions down to multiple child components.
+    /// - Returns an Update that is the result of sequencing actions
+    public static func update(
+        state: Self,
+        actions: [Action],
+        environment: Environment
+    ) -> Update<Self> {
+        actions.reduce(
+            Update(state: state),
+            { result, action in
+                let next = update(
+                    state: result.state,
+                    action: action,
+                    environment: environment
+                )
+                return Update(
+                    state: next.state,
+                    fx: result.fx.merge(with: next.fx).eraseToAnyPublisher(),
+                    transaction: next.transaction
+                )
+            }
+        )
+    }
+}
+
 /// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
 public struct Update<Model: ModelProtocol> {
@@ -65,27 +96,6 @@ public struct Update<Model: ModelProtocol> {
         var this = self
         this.transaction = Transaction(animation: animation)
         return this
-    }
-
-    /// Pipe a state through another update function.
-    /// Allows you to compose multiple update functions together through
-    /// method chaining.
-    ///
-    /// - Updates state,
-    /// - Merges `fx`.
-    /// - Replaces `transaction` with new `Update` transaction.
-    ///
-    /// - Returns a new `Update`
-    public func pipe(
-        _ through: (Model) -> Self
-    ) -> Self {
-        let next = through(self.state)
-        let fx = self.fx.merge(with: next.fx).eraseToAnyPublisher()
-        return Update(
-            state: next.state,
-            fx: fx,
-            transaction: next.transaction
-        )
     }
 }
 
@@ -154,24 +164,33 @@ where Model: ModelProtocol
         // memory leak.
         let id = UUID()
 
-        // Did fx complete immediately?
-        // We use this flag to deal with a race condition where
-        // an effect can complete before it is added to cancellables,
-        // meaking receiveCompletion tries to clean it up before it is added.
-        var didComplete = false
+        // Receive Fx on main thread. This does two important things:
+        //
+        // First, SwiftUI requires that any state mutations that would change
+        // views happen on the main thread. Receiving on main ensures that
+        // all fx-driven state transitions happen on main, even if the
+        // publisher is off-main-thread.
+        //
+        // Second, if we didn't schedule receive on main, it would be possible
+        // for publishers to complete immediately, causing receiveCompletion
+        // to attempt to remove the publisher from `cancellables` before
+        // it is added. By scheduling to receive publisher on main,
+        // we force publisher to complete on next tick, ensuring that it
+        // is always first added, then removed from `cancellables`.
         let cancellable = fx
+            .receive(
+                on: DispatchQueue.main,
+                options: .init(qos: .default)
+            )
             .sink(
                 receiveCompletion: { [weak self] _ in
-                    didComplete = true
                     self?.cancellables.removeValue(forKey: id)
                 },
                 receiveValue: { [weak self] action in
                     self?.send(action)
                 }
             )
-        if !didComplete {
-            self.cancellables[id] = cancellable
-        }
+        self.cancellables[id] = cancellable
     }
 
     /// Send an action to the store to update state and generate effects.
