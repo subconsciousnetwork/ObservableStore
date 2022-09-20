@@ -110,6 +110,16 @@ public protocol StoreProtocol {
     func send(_ action: Model.Action) -> Void
 }
 
+extension StoreProtocol {
+    /// Create a tagged send function suitable for passing down to
+    /// child views. Child view actions will be mapped to store model actions.
+    public func forward<ViewAction>(
+        _ tag: @escaping (ViewAction) -> Model.Action
+    ) -> (ViewAction) -> Void {
+        { viewAction in send(tag(viewAction)) }
+    }
+}
+
 /// Store is a source of truth for a state.
 ///
 /// Store is an `ObservableObject`. You can use it in a view via
@@ -281,66 +291,52 @@ extension CursorProtocol {
     }
 }
 
-/// ViewStore is a local projection of a Store that can be passed down to
-/// a child view.
-//  NOTE: ViewStore works like Binding. It reads state at runtime using a
-//  getter closure that you provide. It is important that we
-//  read the state via a closure, like Binding does, rather than
-//  storing the literal value as a property of the instance.
-//  If you store the literal value as a property, you will have "liveness"
-//  issues with the data in views, especially around things like text editors.
-//  Letters entered out of order, old states showing up, etc.
-//  I suspect this has something to do with either the guts of SwiftUI or the
-//  guts of UIViewRepresentable.
-//  2022-06-12 Gordon Brander
-public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
-    private let _send: (ViewModel.Action) -> Void
+public protocol KeyedCursorProtocol {
+    associatedtype Key
+    associatedtype Model: ModelProtocol
+    associatedtype ViewModel: ModelProtocol
 
-    /// Initialize a ViewStore using a get and send closure.
-    public init(
-        get: () -> ViewModel,
-        send: @escaping (ViewModel.Action) -> Void
-    ) {
-        self.state = get()
-        self._send = send
-    }
+    /// Get an inner state from an outer state
+    static func get(state: Model, key: Key) -> ViewModel?
 
-    /// Get current state
-    public let state: ViewModel
+    /// Set an inner state on an outer state, returning an outer state
+    static func set(state: Model, inner: ViewModel, key: Key) -> Model
 
-    /// Send an action
-    public func send(_ action: ViewModel.Action) {
-        self._send(action)
-    }
+    /// Tag an inner action, transforming it into an outer action
+    static func tag(action: ViewModel.Action, key: Key) -> Model.Action
 }
 
-extension ViewStore {
-    /// Initialize a ViewStore from a store of some type, and a cursor.
-    /// - Store can be any type conforming to `StoreProtocol`
-    /// - Cursor can be any type conforming to `CursorProtocol`
-    public init<Store, Cursor>(store: Store, cursor: Cursor.Type)
-    where
-        Store: StoreProtocol,
-        Cursor: CursorProtocol,
-        Store.Model == Cursor.Model,
-        ViewModel == Cursor.ViewModel
-    {
-        self.init(
-            get: { Cursor.get(state: store.state) },
-            send: { action in store.send(Cursor.tag(action)) }
+extension KeyedCursorProtocol {
+    /// Update an outer state through a keyed cursor.
+    /// KeyedCursorProtocol.update offers a convenient way to call child
+    /// update functions from the parent domain, and get parent-domain
+    /// states and actions back from it.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - `key` a key uniquely representing this model in the parent domain
+    /// - Returns a new outer state or nil
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment: ViewModel.Environment,
+        key: Key
+    ) -> Update<Model>? {
+        guard let inner = get(state: state, key: key) else {
+            return nil
+        }
+        let next = ViewModel.update(
+            state: inner,
+            action: viewAction,
+            environment: environment
         )
-    }
-}
-
-extension ViewStore {
-    /// Create a ViewStore for a constant state that swallows actions.
-    /// Convenience for view previews.
-    public static func constant(
-        state: ViewModel
-    ) -> ViewStore<ViewModel> {
-        ViewStore<ViewModel>(
-            get: { state },
-            send: { action in }
+        return Update(
+            state: set(state: state, inner: next.state, key: key),
+            fx: next.fx
+                .map({ viewAction in Self.tag(action: viewAction, key: key) })
+                .eraseToAnyPublisher(),
+            transaction: next.transaction
         )
     }
 }
