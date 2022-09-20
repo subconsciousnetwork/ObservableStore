@@ -294,20 +294,19 @@ extension CursorProtocol {
 //  guts of UIViewRepresentable.
 //  2022-06-12 Gordon Brander
 public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
-    private let _get: () -> ViewModel
     private let _send: (ViewModel.Action) -> Void
 
     /// Initialize a ViewStore using a get and send closure.
     public init(
-        get: @escaping () -> ViewModel,
+        get: () -> ViewModel,
         send: @escaping (ViewModel.Action) -> Void
     ) {
-        self._get = get
+        self.state = get()
         self._send = send
     }
 
     /// Get current state
-    public var state: ViewModel { self._get() }
+    public let state: ViewModel
 
     /// Send an action
     public func send(_ action: ViewModel.Action) {
