@@ -10,7 +10,7 @@ import Combine
 import SwiftUI
 @testable import ObservableStore
 
-class TestsViewStore: XCTestCase {
+class ComponentMappingTests: XCTestCase {
     enum ParentAction: Hashable {
         case child(ChildAction)
         case setText(String)
@@ -85,95 +85,20 @@ class TestsViewStore: XCTestCase {
         }
     }
 
-    struct SimpleView: View {
-        @Binding var text: String
-
-        var body: some View {
-            Text(text)
-        }
-    }
-
-    func testViewStoreCursor() throws {
+    func testForward() throws {
         let store = Store(
             state: ParentModel(),
             environment: ()
         )
 
-        let viewStore: ViewStore<ChildModel> = ViewStore(
-            store: store,
-            cursor: ParentChildCursor.self
+        let send = Address.forward(
+            send: store.send,
+            tag: ParentChildCursor.tag
         )
 
-        viewStore.send(.setText("Foo"))
-        viewStore.send(.setText("Bar"))
-        XCTAssertEqual(
-            viewStore.state.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.child.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
-    }
+        send(.setText("Foo"))
+        send(.setText("Bar"))
 
-    func testViewStoreGetTag() throws {
-        let store = Store(
-            state: ParentModel(),
-            environment: ()
-        )
-
-        let viewStore: ViewStore<ChildModel> = ViewStore(
-            store: store,
-            cursor: ParentChildCursor.self
-        )
-
-        viewStore.send(.setText("Foo"))
-        viewStore.send(.setText("Bar"))
-        XCTAssertEqual(
-            viewStore.state.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.child.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
-    }
-
-    /// Test creating binding from a ViewStore
-    func testViewStoreBinding() throws {
-        let store = Store(
-            state: ParentModel(),
-            environment: ()
-        )
-
-        let viewStore: ViewStore<ChildModel> = ViewStore(
-            store: store,
-            cursor: ParentChildCursor.self
-        )
-
-        let binding = Binding(
-            store: viewStore,
-            get: \.text,
-            tag: ChildAction.setText
-        )
-
-        let view = SimpleView(text: binding)
-
-        view.text = "Foo"
-        view.text = "Bar"
-
-        XCTAssertEqual(
-            viewStore.state.text,
-            "Bar"
-        )
         XCTAssertEqual(
             store.state.child.text,
             "Bar"

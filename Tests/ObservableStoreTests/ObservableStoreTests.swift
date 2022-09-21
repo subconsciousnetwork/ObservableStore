@@ -91,43 +91,6 @@ final class ObservableStoreTests: XCTestCase {
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
 
-    func testBinding() throws {
-        let store = Store(
-            state: AppModel(),
-            environment: AppModel.Environment()
-        )
-        let view = SimpleCountView(
-            count: Binding(
-                store: store,
-                get: \.count,
-                tag: AppModel.Action.setCount
-            )
-        )
-        view.count = 2
-        XCTAssertEqual(view.count, 2, "binding is set")
-        XCTAssertEqual(store.state.count, 2, "binding sends action to store")
-    }
-
-    func testDeepBinding() throws {
-        let store = Store(
-            state: AppModel(),
-            environment: AppModel.Environment()
-        )
-        let binding = Binding(
-            store: store,
-            get: \.editor,
-            tag: AppModel.Action.setEditor
-        )
-        .input
-        .text
-        binding.wrappedValue = "floop"
-        XCTAssertEqual(
-            store.state.editor.input.text,
-            "floop",
-            "specialized binding sets deep property"
-        )
-    }
-
     func testEmptyFxRemovedOnComplete() {
         let store = Store(
             state: AppModel(),

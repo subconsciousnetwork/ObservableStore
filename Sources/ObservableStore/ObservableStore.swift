@@ -110,16 +110,6 @@ public protocol StoreProtocol {
     func send(_ action: Model.Action) -> Void
 }
 
-extension StoreProtocol {
-    /// Create a tagged send function suitable for passing down to
-    /// child views. Child view actions will be mapped to store model actions.
-    public func forward<ViewAction>(
-        _ tag: @escaping (ViewAction) -> Model.Action
-    ) -> (ViewAction) -> Void {
-        { viewAction in send(tag(viewAction)) }
-    }
-}
-
 /// Store is a source of truth for a state.
 ///
 /// Store is an `ObservableObject`. You can use it in a view via
@@ -247,6 +237,18 @@ where Model: ModelProtocol
     }
 }
 
+public struct Address {
+    /// Forward transform an address (send function) into a local address.
+    /// View-scoped actions are tagged using `tag` before being forwarded to
+    /// `send.`
+    public static func forward<Action, ViewAction>(
+        send: @escaping (Action) -> Void,
+        tag: @escaping (ViewAction) -> Action
+    ) -> (ViewAction) -> Void {
+        { viewAction in send(tag(viewAction)) }
+    }
+}
+
 /// A cursor provides a complete description of how to map from one component
 /// domain to another.
 public protocol CursorProtocol {
@@ -307,29 +309,28 @@ public protocol KeyedCursorProtocol {
 }
 
 extension KeyedCursorProtocol {
-    /// Update an outer state through a keyed cursor.
-    /// KeyedCursorProtocol.update offers a convenient way to call child
-    /// update functions from the parent domain, and get parent-domain
-    /// states and actions back from it.
+    /// Update an inner state within an outer state through a keyed cursor.
+    /// This cursor type is useful when looking up children in dynamic lists
+    /// such as arrays or dictionaries.
     ///
     /// - `state` the outer state
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - `key` a key uniquely representing this model in the parent domain
-    /// - Returns a new outer state or nil
+    /// - Returns an update for a new outer state or nil
     public static func update(
         state: Model,
         action viewAction: ViewModel.Action,
-        environment: ViewModel.Environment,
+        environment viewEnvironment: ViewModel.Environment,
         key: Key
     ) -> Update<Model>? {
-        guard let inner = get(state: state, key: key) else {
+        guard let viewModel = get(state: state, key: key) else {
             return nil
         }
         let next = ViewModel.update(
-            state: inner,
+            state: viewModel,
             action: viewAction,
-            environment: environment
+            environment: viewEnvironment
         )
         return Update(
             state: set(state: state, inner: next.state, key: key),
@@ -339,21 +340,52 @@ extension KeyedCursorProtocol {
             transaction: next.transaction
         )
     }
+
+    /// Update an inner state within an outer state through a keyed cursor.
+    /// This cursor type is useful when looking up children in dynamic lists
+    /// such as arrays or dictionaries.
+    ///
+    /// This version of update always returns an `Update`. If the child model
+    /// cannot be found at key, then it returns an update for the same state
+    /// (noop), effectively ignoring the action.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - `key` a key uniquely representing this model in the parent domain
+    /// - Returns an update for a new outer state or nil
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment viewEnvironment: ViewModel.Environment,
+        key: Key
+    ) -> Update<Model> {
+        guard let next = update(
+            state: state,
+            action: viewAction,
+            environment: viewEnvironment,
+            key: key
+        ) else {
+            return Update(state: state)
+        }
+        return next
+    }
 }
 
 extension Binding {
     /// Initialize a Binding from a store.
     /// - `get` reads the store state to a binding value.
-    /// - `tag` transforms the value into an action.
+    /// - `send` sends the value to some address.
+    /// - `tag` tags the value, turning it into an action
     /// - Returns a binding suitable for use in a vanilla SwiftUI view.
-    public init<Store: StoreProtocol>(
-        store: Store,
-        get: @escaping (Store.Model) -> Value,
-        tag: @escaping (Value) -> Store.Model.Action
+    public init<Action>(
+        state get: @escaping @autoclosure () -> Value,
+        send: @escaping (Action) -> Void,
+        tag: @escaping (Value) -> Action
     ) {
         self.init(
-            get: { get(store.state) },
-            set: { value in store.send(tag(value)) }
+            get: get,
+            set: { value in send(tag(value)) }
         )
     }
 }
