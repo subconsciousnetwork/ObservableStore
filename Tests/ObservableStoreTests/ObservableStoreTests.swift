@@ -11,6 +11,7 @@ final class ObservableStoreTests: XCTestCase {
             case delayIncrement(Double)
             case setCount(Int)
             case setEditor(Editor)
+            case createEmptyFxThatCompletesImmediately
         }
 
         /// Services like API methods go here
@@ -51,6 +52,10 @@ final class ObservableStoreTests: XCTestCase {
                 var model = state
                 model.editor = editor
                 return Update(state: model)
+            case .createEmptyFxThatCompletesImmediately:
+                let fx: Fx<Action> = Empty(completeImmediately: true)
+                    .eraseToAnyPublisher()
+                return Update(state: state, fx: fx)
             }
         }
 
@@ -91,6 +96,10 @@ final class ObservableStoreTests: XCTestCase {
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
 
+    /// Tests that the immediately-completing empty Fx used as the default for
+    /// updates get removed from the cancellables array.
+    /// 
+    /// Failure to remove immediately-completing fx would cause a memory leak.
     func testEmptyFxRemovedOnComplete() {
         let store = Store(
             state: AppModel(),
@@ -99,6 +108,39 @@ final class ObservableStoreTests: XCTestCase {
         store.send(.increment)
         store.send(.increment)
         store.send(.increment)
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    /// Tests that immediately-completing Fx get removed from the cancellables.
+    ///
+    /// array. Failure to remove immediately-completing fx would cause a
+    /// memory leak.
+    ///
+    /// When you don't specify fx for an update, we default to
+    /// an immediately-completing `Empty` publisher, so this test is
+    /// technically the same as the one above. The difference is that it
+    /// does not rely on an implementation detail of `Update` but instead
+    /// tests this behavior directly, in case the implementation were to
+    /// change somehow.
+    func testEmptyFxThatCompleteImmiedatelyRemovedOnComplete() {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+        store.send(.createEmptyFxThatCompletesImmediately)
+        store.send(.createEmptyFxThatCompletesImmediately)
+        store.send(.createEmptyFxThatCompletesImmediately)
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
