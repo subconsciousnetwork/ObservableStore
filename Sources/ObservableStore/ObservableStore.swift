@@ -123,6 +123,12 @@ where Model: ModelProtocol
 {
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
+    /// Private for all actions sent to the store.
+    private var _actions: PassthroughSubject<Model.Action, Never>
+    /// Publisher for all actions sent to the store.
+    public var actions: AnyPublisher<Model.Action, Never> {
+        _actions.eraseToAnyPublisher()
+    }
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
     @Published public private(set) var state: Model
@@ -148,6 +154,19 @@ where Model: ModelProtocol
     ) {
         self.state = state
         self.environment = environment
+        self._actions = PassthroughSubject<Model.Action, Never>()
+    }
+
+    /// Initialize and send an initial action to the store.
+    /// Useful when performing actions once and only once upon creation
+    /// of the store.
+    public convenience init(
+        state: Model,
+        action: Model.Action,
+        environment: Model.Environment
+    ) {
+        self.init(state: state, environment: environment)
+        self.send(action)
     }
 
     /// Subscribe to a publisher of actions, piping them through to
@@ -204,6 +223,8 @@ where Model: ModelProtocol
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
     public func send(_ action: Model.Action) {
+        /// Broadcast action to any outside subscribers
+        self._actions.send(action)
         // Generate next state and effect
         let next = Model.update(
             state: self.state,
