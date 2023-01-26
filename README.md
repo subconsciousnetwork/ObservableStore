@@ -191,28 +191,15 @@ Button("Set color to red") {
 
 ## Bindings
 
-`Binding(store:get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
+`Binding(get:send:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
 
 ```swift
 TextField(
     "Username"
     text: Binding(
-        store: store,
-        get: { state in state.username },
+        get: { store.state.username },
+        send: store.send,
         tag: { username in .setUsername(username) }
-    )
-)
-```
-
-Or, shorthand:
-
-```swift
-TextField(
-    "Username"
-    text: Binding(
-        store: store,
-        get: \.username,
-        tag: .setUsername
     )
 )
 ```
@@ -220,11 +207,11 @@ TextField(
 Bottom line, because Store is just an ordinary [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can produce bindings, you can write views exactly the same way you write vanilla SwiftUI views. No special magic! Properties, [@Binding](https://developer.apple.com/documentation/swiftui/binding), [@ObservedObject](https://developer.apple.com/documentation/swiftui/observedobject), [@StateObject](https://developer.apple.com/documentation/swiftui/stateobject) and [@EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject) all work as you would expect.
 
 
-## ViewStore
+## Scoping store for child components
 
-ViewStore lets you create component-scoped stores from a shared root store. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store. You can think of ViewStore as like a binding, except that it exposes the same StoreProtocol API that Store does.
+We can also create component-scoped state and send callbacks from a shared root store. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store.
 
-Imagine we have a stand-alone child component that looks something like this:
+Imagine we have a vanilla SWiftUI child view that looks something like this:
 
 ```swift
 enum ChildAction {
@@ -249,11 +236,12 @@ struct ChildModel: ModelProtocol {
 }
 
 struct ChildView: View {
-    var store: ViewStore<ChildModel>
+    var state: ChildModel
+    var send: (ChildAction) -> Void
 
     var body: some View {
         VStack {
-            Text("Count \(store.state.count)")
+            Text("Count \(state.count)")
             Button(
                 "Increment",
                 action: {
@@ -265,11 +253,38 @@ struct ChildView: View {
 }
 ```
 
-Now we want to integrate this child component with a parent component. To do this, we can create a ViewStore from the parent's root store. We just need to specify a way to map from this child component's state and actions to the root store state and actions. This is where `CursorProtocol` comes in. It defines three things:
+Now we want to integrate this child component with a parent component. To do this, we just need to specify a way to map from this child component's state and actions to the root store state and actions. First, we pass down the part of the state the child uses. Then we create a scoped `send` function using `Address.forward`. It maps child actions to parent actions using a `tag` closure we provide.
+
+```swift
+struct ContentView: View {
+    @StateObject private var store: Store<AppModel>
+
+    var body: some View {
+        ChildView(
+            state: store.state.child,
+            send: Address.forward(
+                send: store.send,
+                tag: {
+                    switch action {
+                    default:
+                        return .child(action)
+                    }
+                }
+            )
+        )
+    }
+}
+```
+
+Now we just need to integrate our child component's update function with the root update function. This is where `CursorProtocol` comes in. 
+
+It defines three things:
 
 - A way to `get` a local state from the root state
 - A way to `set` a local state on a root state
 - A way to `tag` a local action so it becomes a root action
+
+...and synthesizes an `update` function that automatically maps child state and actions to parent state and actions.
 
 ```swift
 struct AppChildCursor: CursorProtocol {
@@ -294,27 +309,6 @@ struct AppChildCursor: CursorProtocol {
     }
 }
 ```
-
-...This gives us everything we need to map from a local scope to the global store. Now we can create a scoped ViewStore from the shared app store and pass it down to our ChildView.
-
-```swift
-struct ContentView: View {
-    @ObservedObject private var store: Store<AppModel>
-
-    var body: some View {
-        ChildView(
-            store: ViewStore(
-                store: store,
-                cursor: AppChildCursor.self
-            )
-        )
-    }
-}
-```
-
-ViewStores can also be created from other ViewStores, allowing for hierarchical nesting of components.
-
-Now we just need to integrate our child component's update function with the root update function. Cursors gives us a handy shortcut by synthesizing an `update` function that automatically maps child state and actions to parent state and actions.
 
 ```swift
 enum AppAction {
@@ -342,5 +336,3 @@ struct AppModel: ModelProtocol {
 ```
 
 This tagging/update pattern also gives parent components an opportunity to intercept and handle child actions in special ways.
-
-That's it! You can get state and send actions from the ViewStore, just like any other store, and it will translate local state changes and fx into app-level state changes and fx. Using ViewStore you can compose an app from multiple stand-alone components that each describe their own domain model and update logic.
