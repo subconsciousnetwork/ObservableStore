@@ -49,7 +49,7 @@ final class BindingTests: XCTestCase {
         )
 
         let binding = Binding(
-            state: store.state.text,
+            get: { store.state.text },
             send: store.send,
             tag: Action.setText
         )

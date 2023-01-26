@@ -395,12 +395,12 @@ extension KeyedCursorProtocol {
 
 extension Binding {
     /// Initialize a Binding from a store.
-    /// - `get` reads the store state to a binding value.
-    /// - `send` sends the value to some address.
-    /// - `tag` tags the value, turning it into an action
+    /// - `get` reads the binding value.
+    /// - `send` sends actions to some address.
+    /// - `tag` tags the value, turning it into an action for `send`
     /// - Returns a binding suitable for use in a vanilla SwiftUI view.
     public init<Action>(
-        state get: @escaping @autoclosure () -> Value,
+        get: @escaping () -> Value,
         send: @escaping (Action) -> Void,
         tag: @escaping (Value) -> Action
     ) {
