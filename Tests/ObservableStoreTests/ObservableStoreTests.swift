@@ -6,14 +6,14 @@ import SwiftUI
 final class ObservableStoreTests: XCTestCase {
     /// App state
     struct AppModel: ModelProtocol {
-        enum Action {
+        enum Action: Hashable {
             case increment
             case delayIncrement(Double)
             case setCount(Int)
             case setEditor(Editor)
             case createEmptyFxThatCompletesImmediately
         }
-
+        
         /// Services like API methods go here
         struct Environment {
             func delayIncrement(
@@ -27,7 +27,7 @@ final class ObservableStoreTests: XCTestCase {
                     .eraseToAnyPublisher()
             }
         }
-
+        
         /// State update function
         static func update(
             state: AppModel,
@@ -58,40 +58,40 @@ final class ObservableStoreTests: XCTestCase {
                 return Update(state: state, fx: fx)
             }
         }
-
-        struct Editor: Equatable {
-            struct Input: Equatable {
+        
+        struct Editor: Hashable {
+            struct Input: Hashable {
                 var text: String = ""
                 var isFocused: Bool = true
             }
             var input = Input()
         }
-
+        
         var count = 0
         var editor = Editor()
     }
-
+    
     struct SimpleCountView: View {
         @Binding var count: Int
-
+        
         var body: some View {
             Text("Count: \(count)")
         }
     }
-
+    
     var cancellables = Set<AnyCancellable>()
-
+    
     override func setUp() {
         // Empty cancellables
         self.cancellables = Set()
     }
-
+    
     func testStateAdvance() throws {
         let store = Store(
             state: AppModel(),
             environment: AppModel.Environment()
         )
-
+        
         store.send(.increment)
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
@@ -175,24 +175,24 @@ final class ObservableStoreTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 0.5)
     }
-
+    
     func testPublishedPropertyFires() throws {
         let store = Store(
             state: AppModel(),
             environment: AppModel.Environment()
         )
-
+        
         var count = 0
         store.$state
             .sink(receiveValue: { _ in
                 count = count + 1
             })
             .store(in: &cancellables)
-
+        
         store.send(.increment)
         store.send(.increment)
         store.send(.increment)
-
+        
         let expectation = XCTestExpectation(
             description: "publisher fires when state changes"
         )
@@ -206,25 +206,25 @@ final class ObservableStoreTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 0.2)
     }
-
+    
     func testStateOnlySetWhenNotEqual() {
         let store = Store(
             state: AppModel(),
             environment: AppModel.Environment()
         )
-
+        
         var count = 0
         store.$state
             .sink(receiveValue: { _ in
                 count = count + 1
             })
             .store(in: &cancellables)
-
+        
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
         store.send(.setCount(10))
-
+        
         let expectation = XCTestExpectation(
             description: "publisher does not fire when state does not change"
         )
@@ -240,7 +240,7 @@ final class ObservableStoreTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 0.2)
     }
-
+    
     /// Definition for app to test updates
     struct TestUpdateMergeFxState: ModelProtocol {
         enum Action {
@@ -251,9 +251,9 @@ final class ObservableStoreTests: XCTestCase {
             case setTitle(String)
             case setSubtitle(String)
         }
-
+        
         struct Environment {}
-
+        
         /// Update function for Fx tests (below)
         static func update(
             state: Self,
@@ -281,7 +281,7 @@ final class ObservableStoreTests: XCTestCase {
                 .mergeFx(b)
             }
         }
-
+        
         var title: String = ""
         var subtitle: String = ""
     }
@@ -297,11 +297,11 @@ final class ObservableStoreTests: XCTestCase {
                 subtitle: "subtitle"
             )
         )
-
+        
         let expectation = XCTestExpectation(
             description: "check that update fx are merged"
         )
-
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             XCTAssertEqual(
                 store.state.title,
@@ -316,5 +316,58 @@ final class ObservableStoreTests: XCTestCase {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 0.2)
+    }
+    
+    func testInitialActionInit() throws {
+        let store = Store(
+            state: AppModel(),
+            action: .increment,
+            environment: AppModel.Environment()
+        )
+        XCTAssertEqual(
+            store.state.count,
+            1,
+            "action was sent to store during init"
+        )
+    }
+    
+    func testActionsPublisher() throws {
+        let store = Store(
+            state: AppModel(),
+            action: .increment,
+            environment: AppModel.Environment()
+        )
+
+        var actions: [AppModel.Action] = []
+        store.actions
+            .sink(receiveValue: { action in
+                actions.append(action)
+            })
+            .store(in: &cancellables)
+        
+        store.send(.setCount(1))
+        store.send(.setCount(2))
+        store.send(.setCount(3))
+        
+        let expectation = XCTestExpectation(
+            description: "actions publisher fires for every action"
+        )
+
+        DispatchQueue.main.async {
+
+            // Publisher should fire twice: once for initial state,
+            // once for state change.
+            XCTAssertEqual(
+                actions,
+                [
+                    .setCount(1),
+                    .setCount(2),
+                    .setCount(3)
+                ],
+                "publisher does not fire when state does not change"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
     }
 }
