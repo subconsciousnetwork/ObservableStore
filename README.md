@@ -207,7 +207,7 @@ TextField(
 Bottom line, because Store is just an ordinary [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can produce bindings, you can write views exactly the same way you write vanilla SwiftUI views. No special magic! Properties, [@Binding](https://developer.apple.com/documentation/swiftui/binding), [@ObservedObject](https://developer.apple.com/documentation/swiftui/observedobject), [@StateObject](https://developer.apple.com/documentation/swiftui/stateobject) and [@EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject) all work as you would expect.
 
 
-## Scoping store for child components
+## Creating scoped child components
 
 We can also create component-scoped state and send callbacks from a shared root store. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store.
 
@@ -253,38 +253,13 @@ struct ChildView: View {
 }
 ```
 
-Now we want to integrate this child component with a parent component. To do this, we just need to specify a way to map from this child component's state and actions to the root store state and actions. First, we pass down the part of the state the child uses. Then we create a scoped `send` function using `Address.forward`. It maps child actions to parent actions using a `tag` closure we provide.
-
-```swift
-struct ContentView: View {
-    @StateObject private var store: Store<AppModel>
-
-    var body: some View {
-        ChildView(
-            state: store.state.child,
-            send: Address.forward(
-                send: store.send,
-                tag: {
-                    switch action {
-                    default:
-                        return .child(action)
-                    }
-                }
-            )
-        )
-    }
-}
-```
-
-Now we just need to integrate our child component's update function with the root update function. This is where `CursorProtocol` comes in. 
-
-It defines three things:
+Now we just need to integrate our child component's update function with the root update function. This is where `CursorProtocol` comes in. It defines three things:
 
 - A way to `get` a local state from the root state
 - A way to `set` a local state on a root state
 - A way to `tag` a local action so it becomes a root action
 
-...and synthesizes an `update` function that automatically maps child state and actions to parent state and actions.
+Together, these functions give us everything we need to map from child to parent component.
 
 ```swift
 struct AppChildCursor: CursorProtocol {
@@ -309,6 +284,26 @@ struct AppChildCursor: CursorProtocol {
     }
 }
 ```
+
+Let's start by integrating the child view with the parent view. We pass down part of the parent state to the child, along with a scoped `send` callback that will map child actions to parent actions. We can create this scoped `send` with `Address.forward`, passing it the store's send method, and the cursor's tag function.
+
+```swift
+struct ContentView: View {
+    @StateObject private var store: Store<AppModel>
+
+    var body: some View {
+        ChildView(
+            state: store.state.child,
+            send: Address.forward(
+                send: store.send,
+                tag: AppChildCursor.tag
+            )
+        )
+    }
+}
+```
+
+Next, we want to integrate the child's update function into the parent update function. Luckily, `CursorProtocol` synthesizes an `update` function that automatically maps child state and actions to parent state and actions.
 
 ```swift
 enum AppAction {
