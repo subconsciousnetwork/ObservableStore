@@ -253,13 +253,13 @@ struct ChildView: View {
 }
 ```
 
-Now we just need to integrate our child component's update function with the root update function. This is where `CursorProtocol` comes in. It defines three things:
+Let's integrate this child component with a parent component. This is where `CursorProtocol` comes in. It defines three things:
 
 - A way to `get` a local state from the root state
 - A way to `set` a local state on a root state
 - A way to `tag` a local action so it becomes a root action
 
-Together, these functions give us everything we need to map from child to parent component.
+Together, these functions give us everything we need to map from child to parent.
 
 ```swift
 struct AppChildCursor: CursorProtocol {
