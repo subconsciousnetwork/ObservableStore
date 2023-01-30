@@ -6,11 +6,7 @@ ObservableStore helps you craft more reliable apps by centralizing all of your a
 
 Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can be used anywhere in SwiftUI that ObservableObject would be used.
 
-You can use Store as a single shared [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or you can pass scoped parts of store down to sub-view through:
-
-- Bare properties of `store.state`
-- Ordinary SwiftUI bindings
-- ViewStores that that offer a scoped view over an underlying shared parent store.
+You can centralize all application state in a single Store, use the Store as an [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or create multiple `@StateObject` stores. You can also pass scoped parts of a store down to sub-views as `@Bindings` or as ordinary bare properties of `store.state`.
 
 ## Example
 
