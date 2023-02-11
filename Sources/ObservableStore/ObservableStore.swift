@@ -258,7 +258,7 @@ where Model: ModelProtocol
     }
 }
 
-public struct Address {
+public struct Cursor {
     /// Forward transform an address (send function) into a local address.
     /// View-scoped actions are tagged using `tag` before being forwarded to
     /// `send.`
@@ -268,25 +268,7 @@ public struct Address {
     ) -> (ViewAction) -> Void {
         { viewAction in send(tag(viewAction)) }
     }
-}
-
-/// A cursor provides a complete description of how to map from one component
-/// domain to another.
-public protocol CursorProtocol {
-    associatedtype Model: ModelProtocol
-    associatedtype ViewModel: ModelProtocol
-
-    /// Get an inner state from an outer state
-    static func get(state: Model) -> ViewModel
-
-    /// Set an inner state on an outer state, returning an outer state
-    static func set(state: Model, inner: ViewModel) -> Model
-
-    /// Tag an inner action, transforming it into an outer action
-    static func tag(_ action: ViewModel.Action) -> Model.Action
-}
-
-extension CursorProtocol {
+    
     /// Update an outer state through a cursor.
     /// CursorProtocol.update offers a convenient way to call child
     /// update functions from the parent domain, and get parent-domain
@@ -296,100 +278,30 @@ extension CursorProtocol {
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - Returns a new outer state
-    public static func update(
+    public func update<Model: ModelProtocol, ViewModel: ModelProtocol>(
+        get: (Model) -> ViewModel?,
+        set: (Model, ViewModel) -> Model,
+        tag: @escaping (ViewModel.Action) -> Model.Action,
         state: Model,
         action viewAction: ViewModel.Action,
         environment: ViewModel.Environment
     ) -> Update<Model> {
+        // If get returns nil, just return previous state.
+        // This can happen if (for example) a getter is looking up a
+        // list item that no longer exists.
+        guard let inner = get(state) else {
+            return Update(state: state)
+        }
         let next = ViewModel.update(
-            state: get(state: state),
+            state: inner,
             action: viewAction,
             environment: environment
         )
         return Update(
-            state: set(state: state, inner: next.state),
+            state: set(state, next.state),
             fx: next.fx.map(tag).eraseToAnyPublisher(),
             transaction: next.transaction
         )
-    }
-}
-
-public protocol KeyedCursorProtocol {
-    associatedtype Key
-    associatedtype Model: ModelProtocol
-    associatedtype ViewModel: ModelProtocol
-
-    /// Get an inner state from an outer state
-    static func get(state: Model, key: Key) -> ViewModel?
-
-    /// Set an inner state on an outer state, returning an outer state
-    static func set(state: Model, inner: ViewModel, key: Key) -> Model
-
-    /// Tag an inner action, transforming it into an outer action
-    static func tag(action: ViewModel.Action, key: Key) -> Model.Action
-}
-
-extension KeyedCursorProtocol {
-    /// Update an inner state within an outer state through a keyed cursor.
-    /// This cursor type is useful when looking up children in dynamic lists
-    /// such as arrays or dictionaries.
-    ///
-    /// - `state` the outer state
-    /// - `action` the inner action
-    /// - `environment` the environment for the update function
-    /// - `key` a key uniquely representing this model in the parent domain
-    /// - Returns an update for a new outer state or nil
-    public static func update(
-        state: Model,
-        action viewAction: ViewModel.Action,
-        environment viewEnvironment: ViewModel.Environment,
-        key: Key
-    ) -> Update<Model>? {
-        guard let viewModel = get(state: state, key: key) else {
-            return nil
-        }
-        let next = ViewModel.update(
-            state: viewModel,
-            action: viewAction,
-            environment: viewEnvironment
-        )
-        return Update(
-            state: set(state: state, inner: next.state, key: key),
-            fx: next.fx
-                .map({ viewAction in Self.tag(action: viewAction, key: key) })
-                .eraseToAnyPublisher(),
-            transaction: next.transaction
-        )
-    }
-
-    /// Update an inner state within an outer state through a keyed cursor.
-    /// This cursor type is useful when looking up children in dynamic lists
-    /// such as arrays or dictionaries.
-    ///
-    /// This version of update always returns an `Update`. If the child model
-    /// cannot be found at key, then it returns an update for the same state
-    /// (noop), effectively ignoring the action.
-    ///
-    /// - `state` the outer state
-    /// - `action` the inner action
-    /// - `environment` the environment for the update function
-    /// - `key` a key uniquely representing this model in the parent domain
-    /// - Returns an update for a new outer state or nil
-    public static func update(
-        state: Model,
-        action viewAction: ViewModel.Action,
-        environment viewEnvironment: ViewModel.Environment,
-        key: Key
-    ) -> Update<Model> {
-        guard let next = update(
-            state: state,
-            action: viewAction,
-            environment: viewEnvironment,
-            key: key
-        ) else {
-            return Update(state: state)
-        }
-        return next
     }
 }
 
