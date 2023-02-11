@@ -278,7 +278,7 @@ public struct Cursor {
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - Returns a new outer state
-    public func update<Model: ModelProtocol, ViewModel: ModelProtocol>(
+    public static func update<Model: ModelProtocol, ViewModel: ModelProtocol>(
         get: (Model) -> ViewModel?,
         set: (Model, ViewModel) -> Model,
         tag: @escaping (ViewModel.Action) -> Model.Action,
