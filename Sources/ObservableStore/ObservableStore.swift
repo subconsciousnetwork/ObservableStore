@@ -301,7 +301,7 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     private var _send: (ViewModel.Action) -> Void
     public var state: ViewModel
 
-    init(
+    public init(
         state: ViewModel,
         send: @escaping (ViewModel.Action) -> Void
     ) {
@@ -315,7 +315,7 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
 }
 
 extension ViewStore {
-    init<Action>(
+    public init<Action>(
         state: ViewModel,
         send: @escaping (Action) -> Void,
         tag: @escaping (ViewModel.Action) -> Action
@@ -337,46 +337,6 @@ extension StoreProtocol {
             state: get(self.state),
             send: self.send,
             tag: tag
-        )
-    }
-}
-
-public protocol CursorProtocol {
-    associatedtype Model: ModelProtocol
-    associatedtype ViewModel: ModelProtocol
-    
-    func get(_ state: Model) -> ViewModel?
-    
-    func set(_ state: Model, _ inner: ViewModel) -> Model
-    
-    func tag(_ action: ViewModel.Action) -> Model.Action
-}
-
-extension ModelProtocol {
-    /// Update an outer state through a cursor.
-    /// Offers a convenient way to call child update functions from the
-    /// parent domain, and get parent-domain states and actions back from it.
-    ///
-    /// - `cursor` Any type that conforms to CursorProtocol
-    /// - `state` the outer state
-    /// - `action` the inner action
-    /// - `environment` the environment for the update function
-    /// - Returns a new outer state
-    public static func update<Cursor: CursorProtocol>(
-        cursor: Cursor,
-        state: Self,
-        action viewAction: Cursor.ViewModel.Action,
-        environment: Cursor.ViewModel.Environment
-    ) -> Update<Self>
-    where Cursor.Model == Self
-    {
-        update(
-            get: cursor.get,
-            set: cursor.set,
-            tag: cursor.tag,
-            state: state,
-            action: viewAction,
-            environment: environment
         )
     }
 }
@@ -407,6 +367,18 @@ extension Binding {
         self.init(
             get: get,
             set: { value in send(tag(value)) }
+        )
+    }
+}
+
+extension StoreProtocol {
+    func binding<Value>(
+        get: @escaping (Self.Model) -> Value,
+        tag: @escaping (Value) -> Self.Model.Action
+    ) -> Binding<Value> {
+        Binding(
+            get: { get(self.state) },
+            set: { value in self.send(tag(value)) }
         )
     }
 }

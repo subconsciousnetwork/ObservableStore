@@ -30,7 +30,9 @@ class ComponentMappingTests: XCTestCase {
             switch action {
             case .child(let action):
                 return update(
-                    cursor: ParentChildCursor.default,
+                    get: ParentChildCursor.default.get,
+                    set: ParentChildCursor.default.set,
+                    tag: ParentChildCursor.default.tag,
                     state: state,
                     action: action,
                     environment: ()
@@ -47,7 +49,9 @@ class ComponentMappingTests: XCTestCase {
                 )
             case .setText(let text):
                 var next = update(
-                    cursor: ParentChildCursor.default,
+                    get: ParentChildCursor.default.get,
+                    set: ParentChildCursor.default.set,
+                    tag: ParentChildCursor.default.tag,
                     state: state,
                     action: .setText(text),
                     environment: ()
@@ -80,7 +84,7 @@ class ComponentMappingTests: XCTestCase {
         }
     }
     
-    struct ParentChildCursor: CursorProtocol {
+    struct ParentChildCursor {
         static let `default` = ParentChildCursor()
         
         func get(_ state: ParentModel) -> ChildModel? {
@@ -101,7 +105,7 @@ class ComponentMappingTests: XCTestCase {
         }
     }
     
-    struct KeyedParentChildCursor: CursorProtocol {
+    struct KeyedParentChildCursor {
         let key: String
 
         func get(_ state: ParentModel) -> ChildModel? {
@@ -168,7 +172,9 @@ class ComponentMappingTests: XCTestCase {
     
     func testCursorUpdateTransaction() throws {
         let update = ParentModel.update(
-            cursor: ParentChildCursor.default,
+            get: ParentChildCursor.default.get,
+            set: ParentChildCursor.default.set,
+            tag: ParentChildCursor.default.tag,
             state: ParentModel(),
             action: ChildAction.setText("Foo"),
             environment: ()
@@ -221,8 +227,11 @@ class ComponentMappingTests: XCTestCase {
     }
     
     func testKeyedCursorUpdateTransaction() throws {
+        let cursor = KeyedParentChildCursor(key: "a")
         let update = ParentModel.update(
-            cursor: KeyedParentChildCursor(key: "a"),
+            get: cursor.get,
+            set: cursor.set,
+            tag: cursor.tag,
             state: ParentModel(
                 keyedChildren: [
                     "a": ChildModel(text: "A"),
