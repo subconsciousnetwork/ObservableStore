@@ -4,9 +4,9 @@ A simple Elm-like Store for SwiftUI, based on [ObservableObject](https://develop
 
 ObservableStore helps you craft more reliable apps by centralizing all of your application state into one place, and giving you a deterministic system for managing state changes and side-effects. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order. If you’ve ever used [Elm](https://guide.elm-lang.org/architecture/) or [Redux](https://redux.js.org/), you get the gist.
 
-Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can be used anywhere in SwiftUI that ObservableObject would be used.
+Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), it can be used anywhere in SwiftUI that ObservableObject would be used.
 
-You can centralize all application state in a single Store, use the Store as an [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or create multiple `@StateObject` stores. You can also pass scoped parts of a store down to sub-views as `@Bindings` or as ordinary bare properties of `store.state`.
+You can centralize all application state in a single Store, use the Store as an [`EnvironmentObject`](https://developer.apple.com/documentation/swiftui/environmentobject), or create multiple `@StateObject` stores. You can also pass scoped parts of a store down to sub-views as `@Bindings`, as scoped `ViewStores`, or as ordinary bare properties of `store.state`.
 
 ## Example
 
@@ -187,14 +187,13 @@ Button("Set color to red") {
 
 ## Bindings
 
-`Binding(get:send:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of the store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
+`StoreProtocol.binding(get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of a store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
 
 ```swift
 TextField(
     "Username"
-    text: Binding(
-        get: { store.state.username },
-        send: store.send,
+    text: store.binding(
+        get: { state in state.username },
         tag: { username in .setUsername(username) }
     )
 )
@@ -205,9 +204,9 @@ Bottom line, because Store is just an ordinary [ObservableObject](https://develo
 
 ## Creating scoped child components
 
-We can also create component-scoped state and send callbacks from a shared root store. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store.
+We can also create `ViewStore`s that represent just a scoped part of the root store. You can think of them as being like a binding, but they expose a `StoreProtocol` interface, instead of a binding interface. This allows you to create apps from free-standing components that all have their own local state, actions, and update functions, but share the same underlying root store.
 
-Imagine we have a vanilla SWiftUI child view that looks something like this:
+Imagine we have a SWiftUI child view that looks something like this:
 
 ```swift
 enum ChildAction {
@@ -232,12 +231,11 @@ struct ChildModel: ModelProtocol {
 }
 
 struct ChildView: View {
-    var state: ChildModel
-    var send: (ChildAction) -> Void
+    var store: ViewStore<ChildModel>
 
     var body: some View {
         VStack {
-            Text("Count \(state.count)")
+            Text("Count \(store.state.count)")
             Button(
                 "Increment",
                 action: {
@@ -249,23 +247,23 @@ struct ChildView: View {
 }
 ```
 
-Let's integrate this child component with a parent component. This is where `CursorProtocol` comes in. It defines three things:
+To integrate this child component with a parent component, we're going to need 3 functions:
 
-- A way to `get` a local state from the root state
-- A way to `set` a local state on a root state
-- A way to `tag` a local action so it becomes a root action
+- A function to `get` a local state from the root state
+- A function to `set` a local state on a root state
+- A function to `tag` a local action so it becomes a root action
 
-Together, these functions give us everything we need to map from child to parent.
+Together, these functions give us everything we need to map from child domain to a parent domain. Let's define them as static functions so we have them all in one place.
 
 ```swift
-struct AppChildCursor: CursorProtocol {
+struct AppChildCursor {
     /// Get child state from parent
-    static func get(state: ParentModel) -> ChildModel {
+    static func get(_ state: ParentModel) -> ChildModel {
         state.child
     }
 
     /// Set child state on parent
-    static func set(state: ParentModel, inner child: ChildModel) -> ParentModel {
+    static func set(_ state: ParentModel, _ child: ChildModel) -> ParentModel {
         var model = state
         model.child = child
         return model
@@ -281,7 +279,9 @@ struct AppChildCursor: CursorProtocol {
 }
 ```
 
-Let's start by integrating the child view with the parent view. We pass down part of the parent state to the child, along with a scoped `send` callback that will map child actions to parent actions. We can create this scoped `send` with `Address.forward`, passing it the store's send method, and the cursor's tag function.
+Ok, now that we have everything we need to map from the parent domain to the child domain, let's integrate the child view with the parent view.
+
+We call the `store.viewStore(get:tag:)` method to create a scoped ViewStore from our store, and pass it the appropriate cursor functions.
 
 ```swift
 struct ContentView: View {
@@ -289,9 +289,8 @@ struct ContentView: View {
 
     var body: some View {
         ChildView(
-            state: store.state.child,
-            send: Address.forward(
-                send: store.send,
+            store: store.viewStore(
+                get: AppChildCursor.get,
                 tag: AppChildCursor.tag
             )
         )
@@ -299,7 +298,9 @@ struct ContentView: View {
 }
 ```
 
-Next, we want to integrate the child's update function into the parent update function. Luckily, `CursorProtocol` synthesizes an `update` function that automatically maps child state and actions to parent state and actions.
+Note that `.viewStore(get:tag:)` is an extension of `StoreProtocol`, so you can call it on `Store` or `ViewStore` to create arbitrarily nested components!
+
+Next, we want to integrate the child's update function into the parent update function. Luckily, `ModelProtocol` synthesizes an `update(get:set:tag:state:action:environment)` function that automatically maps child state and actions to parent state and actions.
 
 ```swift
 enum AppAction {
@@ -310,6 +311,9 @@ struct AppModel: ModelProtocol {
     var child = ChildModel()
 
     static func update(
+        get: AppChildCursor.get,
+        set: AppChildCursor.set,
+        tag: AppChildCursor.tag,
         state: AppModel,
         action: AppAction,
         environment: AppEnvironment
@@ -326,4 +330,4 @@ struct AppModel: ModelProtocol {
 }
 ```
 
-This tagging/update pattern also gives parent components an opportunity to intercept and handle child actions in special ways.
+And that's it! We have successfully created an isolated child component and integrated it into a parent component. This tagging/update pattern also gives parent components an opportunity to intercept and handle child actions in special ways.
