@@ -29,20 +29,25 @@ class ComponentMappingTests: XCTestCase {
         ) -> Update<ParentModel> {
             switch action {
             case .child(let action):
-                return ParentChildCursor.update(
+                return update(
+                    cursor: ParentChildCursor.default,
                     state: state,
                     action: action,
                     environment: ()
                 )
             case let .keyedChild(action, key):
-                return KeyedParentChildCursor.update(
+                let cursor = KeyedParentChildCursor(key: key)
+                return update(
+                    get: cursor.get,
+                    set: cursor.set,
+                    tag: cursor.tag,
                     state: state,
                     action: action,
-                    environment: (),
-                    key: key
+                    environment: ()
                 )
             case .setText(let text):
-                var next = ParentChildCursor.update(
+                var next = update(
+                    cursor: ParentChildCursor.default,
                     state: state,
                     action: .setText(text),
                     environment: ()
@@ -76,17 +81,19 @@ class ComponentMappingTests: XCTestCase {
     }
     
     struct ParentChildCursor: CursorProtocol {
-        static func get(state: ParentModel) -> ChildModel {
+        static let `default` = ParentChildCursor()
+        
+        func get(_ state: ParentModel) -> ChildModel? {
             state.child
         }
         
-        static func set(state: ParentModel, inner: ChildModel) -> ParentModel {
+        func set(_ state: ParentModel, _ inner: ChildModel) -> ParentModel {
             var model = state
             model.child = inner
             return model
         }
         
-        static func tag(_ action: ChildAction) -> ParentAction {
+        func tag(_ action: ChildAction) -> ParentAction {
             switch action {
             case .setText(let string):
                 return .setText(string)
@@ -94,22 +101,23 @@ class ComponentMappingTests: XCTestCase {
         }
     }
     
-    struct KeyedParentChildCursor: KeyedCursorProtocol {
-        static func get(state: ParentModel, key: String) -> ChildModel? {
+    struct KeyedParentChildCursor: CursorProtocol {
+        let key: String
+
+        func get(_ state: ParentModel) -> ChildModel? {
             state.keyedChildren[key]
         }
         
-        static func set(
-            state: ParentModel,
-            inner: ChildModel,
-            key: String
+        func set(
+            _ state: ParentModel,
+            _ inner: ChildModel
         ) -> ParentModel {
             var model = state
             model.keyedChildren[key] = inner
             return model
         }
         
-        static func tag(action: ChildAction, key: String) -> ParentAction {
+        func tag(_ action: ChildAction) -> ParentAction {
             .keyedChild(action: action, key: key)
         }
     }
@@ -122,7 +130,7 @@ class ComponentMappingTests: XCTestCase {
         
         let send = Address.forward(
             send: store.send,
-            tag: ParentChildCursor.tag
+            tag: ParentChildCursor.default.tag
         )
         
         send(.setText("Foo"))
@@ -159,7 +167,8 @@ class ComponentMappingTests: XCTestCase {
     }
     
     func testCursorUpdateTransaction() throws {
-        let update = ParentChildCursor.update(
+        let update = ParentModel.update(
+            cursor: ParentChildCursor.default,
             state: ParentModel(),
             action: ChildAction.setText("Foo"),
             environment: ()
@@ -212,7 +221,8 @@ class ComponentMappingTests: XCTestCase {
     }
     
     func testKeyedCursorUpdateTransaction() throws {
-        let update: Update<ParentModel> = KeyedParentChildCursor.update(
+        let update = ParentModel.update(
+            cursor: KeyedParentChildCursor(key: "a"),
             state: ParentModel(
                 keyedChildren: [
                     "a": ChildModel(text: "A"),
@@ -221,8 +231,7 @@ class ComponentMappingTests: XCTestCase {
                 ]
             ),
             action: .setText("Foo"),
-            environment: (),
-            key: "a"
+            environment: ()
         )
         XCTAssertNotNil(
             update.transaction,
