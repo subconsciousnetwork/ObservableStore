@@ -329,7 +329,7 @@ extension ViewStore {
 
 extension StoreProtocol {
     /// Create a viewStore from a StoreProtocol
-    func viewStore<ViewModel: ModelProtocol>(
+    public func viewStore<ViewModel: ModelProtocol>(
         get: (Self.Model) -> ViewModel,
         tag: @escaping (ViewModel.Action) -> Self.Model.Action
     ) -> ViewStore<ViewModel> {
@@ -372,7 +372,7 @@ extension Binding {
 }
 
 extension StoreProtocol {
-    func binding<Value>(
+    public func binding<Value>(
         get: @escaping (Self.Model) -> Value,
         tag: @escaping (Value) -> Self.Model.Action
     ) -> Binding<Value> {
