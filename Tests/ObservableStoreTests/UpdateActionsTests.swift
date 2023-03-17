@@ -40,14 +40,14 @@ class UpdateActionsTests: XCTestCase {
                 model.text = text
                 return Update(state: model)
             case let .delayedText(text, delay):
-                let fx: Fx<Action> = Just(
+                let fx: Effect<Action> = Just(
                     Action.setText(text)
                 )
                 .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
                 .eraseToAnyPublisher()
                 return Update(state: state, fx: fx)
             case let .delayedIncrement(delay):
-                let fx: Fx<Action> = Just(
+                let fx: Effect<Action> = Just(
                     Action.increment
                 )
                 .delay(for: .seconds(delay), scheduler: DispatchQueue.main)

@@ -53,7 +53,7 @@ final class ObservableStoreTests: XCTestCase {
                 model.editor = editor
                 return Update(state: model)
             case .createEmptyFxThatCompletesImmediately:
-                let fx: Fx<Action> = Empty(completeImmediately: true)
+                let fx: Effect<Action> = Empty(completeImmediately: true)
                     .eraseToAnyPublisher()
                 return Update(state: state, fx: fx)
             }
@@ -299,7 +299,7 @@ final class ObservableStoreTests: XCTestCase {
         )
         
         let expectation = XCTestExpectation(
-            description: "check that update fx are merged"
+            description: "check that update effects are merged"
         )
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

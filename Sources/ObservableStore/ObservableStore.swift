@@ -7,8 +7,27 @@ import Foundation
 import Combine
 import SwiftUI
 
-/// Fx is a publisher that publishes actions and never fails.
-public typealias Fx<Action> = AnyPublisher<Action, Never>
+/// Effect represents a unit of asyncronous work that returns an `Action` and
+/// never fails.
+///
+/// It's a wrapper for an async closure that can be passed around and
+/// manipulated.
+public struct Effect<Action> {
+    public var execute: () async -> Action
+    
+    public init(_ execute: @escaping () async -> Action) {
+        self.execute = execute
+    }
+    
+    /// Map an effect action to another type.
+    public func map<ViewAction>(
+        _ transform: @escaping (Action) -> ViewAction
+    ) -> Effect<ViewAction> {
+        Effect<ViewAction> {
+            await transform(self.execute())
+        }
+    }
+}
 
 /// A model is an equatable type that knows how to create
 /// state `Updates` for itself via a static update function.
@@ -36,21 +55,18 @@ extension ModelProtocol {
         actions: [Action],
         environment: Environment
     ) -> Update<Self> {
-        actions.reduce(
-            Update(state: state),
-            { result, action in
-                let next = update(
-                    state: result.state,
-                    action: action,
-                    environment: environment
-                )
-                return Update(
-                    state: next.state,
-                    fx: result.fx.merge(with: next.fx).eraseToAnyPublisher(),
-                    transaction: next.transaction
-                )
-            }
-        )
+        var result = Update(state: state)
+        for action in actions {
+            let next = update(
+                state: result.state,
+                action: action,
+                environment: environment
+            )
+            result.state = next.state
+            result.effects.append(contentsOf: next.effects)
+            result.transaction = next.transaction
+        }
+        return result
     }
 }
 
@@ -87,7 +103,7 @@ extension ModelProtocol {
         )
         return Update(
             state: set(state, next.state),
-            fx: next.fx.map(tag).eraseToAnyPublisher(),
+            effects: next.effects.map({ effect in effect.map(tag) }),
             transaction: next.transaction
         )
     }
@@ -100,7 +116,7 @@ public struct Update<Model: ModelProtocol> {
     public var state: Model
     /// `Fx` for this update.
     /// Default is an `Empty` publisher (no effects)
-    public var fx: Fx<Model.Action>
+    public var effects: [Effect<Model.Action>]
     /// The transaction that should be set during this update.
     /// Store uses this value to set the transaction while updating state,
     /// allowing you to drive explicit animations from your update function.
@@ -111,23 +127,53 @@ public struct Update<Model: ModelProtocol> {
 
     public init(
         state: Model,
-        fx: Fx<Model.Action> = Empty(completeImmediately: true)
-            .eraseToAnyPublisher(),
+        effects: [Effect<Model.Action>],
         transaction: Transaction? = nil
     ) {
         self.state = state
-        self.fx = fx
+        self.effects = effects
         self.transaction = transaction
     }
 
-    /// Merge existing fx together with new fx.
-    /// - Returns a new `Update`
-    public func mergeFx(_ fx: Fx<Model.Action>) -> Update<Model> {
-        var this = self
-        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
-        return this
+    public init(
+        state: Model,
+        effect: Effect<Model.Action>,
+        animation: Animation? = nil
+    ) {
+        self.state = state
+        self.effects = [effect]
+        self.transaction = Transaction(animation: animation)
     }
 
+    public init(
+        state: Model,
+        animation: Animation? = nil
+    ) {
+        self.state = state
+        self.effects = []
+        self.transaction = Transaction(animation: animation)
+    }
+
+    /// Merge existing effects together with a new effect.
+    /// - Returns a new `Update`
+    public func mergeEffect(
+        _ effect: Effect<Model.Action>
+    ) -> Update<Model> {
+        var this = self
+        this.effects.append(effect)
+        return this
+    }
+    
+    /// Merge existing effects together with new effects.
+    /// - Returns a new `Update`
+    public func mergeEffects(
+        _ effects: [Effect<Model.Action>]
+    ) -> Update<Model> {
+        var this = self
+        this.effects.append(contentsOf: effects)
+        return this
+    }
+    
     /// Set explicit animation for this update.
     /// Sets new transaction with specified animation.
     /// - Returns a new `Update`
@@ -160,8 +206,6 @@ public protocol StoreProtocol {
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
-    /// Stores cancellables by ID
-    private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Private for all actions sent to the store.
     private var _actions: PassthroughSubject<Model.Action, Never>
     /// Publisher for all actions sent to the store.
@@ -208,59 +252,16 @@ where Model: ModelProtocol
         self.send(action)
     }
 
-    /// Subscribe to a publisher of actions, piping them through to
-    /// the store.
-    ///
-    /// Holds on to the cancellable until publisher completes.
-    /// When publisher completes, removes cancellable.
-    public func subscribe(to fx: Fx<Model.Action>) {
-        // Create a UUID for the cancellable.
-        // Store cancellable in dictionary by UUID.
-        // Remove cancellable from dictionary upon effect completion.
-        // This retains the effect pipeline for as long as it takes to complete
-        // the effect, and then removes it, so we don't have a cancellables
-        // memory leak.
-        let id = UUID()
-
-        // Receive Fx on main thread. This does two important things:
-        //
-        // First, SwiftUI requires that any state mutations that would change
-        // views happen on the main thread. Receiving on main ensures that
-        // all fx-driven state transitions happen on main, even if the
-        // publisher is off-main-thread.
-        //
-        // Second, if we didn't schedule receive on main, it would be possible
-        // for publishers to complete immediately, causing receiveCompletion
-        // to attempt to remove the publisher from `cancellables` before
-        // it is added. By scheduling to receive publisher on main,
-        // we force publisher to complete on next tick, ensuring that it
-        // is always first added, then removed from `cancellables`.
-        let cancellable = fx
-            .receive(
-                on: DispatchQueue.main,
-                options: .init(qos: .default)
-            )
-            .sink(
-                receiveCompletion: { [weak self] _ in
-                    self?.cancellables.removeValue(forKey: id)
-                },
-                receiveValue: { [weak self] action in
-                    self?.send(action)
-                }
-            )
-        self.cancellables[id] = cancellable
+    /// Run an effect and send result back to store.
+    public func run(_ effect: Effect<Model.Action>) {
+        Task {
+            let action = await effect.execute()
+            self.send(action)
+        }
     }
 
     /// Send an action to the store to update state and generate effects.
     /// Any effects generated are fed back into the store.
-    ///
-    /// Note: SwiftUI requires that all UI changes happen on main thread.
-    /// We run effects as-given, without forcing them on to main thread.
-    /// This means that main-thread effects will be run immediately, enabling
-    /// you to drive things like withAnimation via actions.
-    /// However it also means that publishers which run off-main-thread MUST
-    /// make sure that they join the main thread (e.g. with
-    /// `.receive(on: DispatchQueue.main)`).
     public func send(_ action: Model.Action) {
         /// Broadcast action to any outside subscribers
         self._actions.send(action)
@@ -292,8 +293,9 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
-        // Run effect
-        self.subscribe(to: next.fx)
+        for effect in next.effects {
+            self.run(effect)
+        }
     }
 }
 
