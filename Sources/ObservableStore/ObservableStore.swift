@@ -37,9 +37,9 @@ public protocol ModelProtocol: Equatable {
 }
 
 extension ModelProtocol {
-    /// Update state through a sequence of actions, merging fx.
+    /// Update state through a sequence of actions, merging effects.
     /// - State updates happen immediately
-    /// - Fx are merged
+    /// - Effects are merged
     /// - Last transaction wins
     /// This function is useful for composing actions, or when dispatching
     /// actions down to multiple child components.
@@ -103,13 +103,12 @@ extension ModelProtocol {
     }
 }
 
-/// Update represents a state change, together with an `Fx` publisher,
-/// and an optional `Transaction`.
+/// Update represents a state change, together with effects, and an
+/// optional transaction.
 public struct Update<Model: ModelProtocol> {
     /// `State` for this update
     public var state: Model
-    /// `Fx` for this update.
-    /// Default is an `Empty` publisher (no effects)
+    /// Effects for this update.
     public var effects: [Effect<Model.Action>]
     /// The transaction that should be set during this update.
     /// Store uses this value to set the transaction while updating state,
@@ -214,15 +213,6 @@ where Model: ModelProtocol
     ///
     /// This is also a good place to put long-lived services, such as keyboard
     /// listeners, since its lifetime will match the lifetime of the Store.
-    ///
-    /// Tip: if you need to publish external events to the store, such as
-    /// keyboard events, consider publishing them via a Combine Publisher on
-    /// the environment. You can subscribe to the publisher in `update`, for
-    /// example, by firing an action `onAppear`, then mapping the environment
-    /// publisher to an `fx` and returning it as part of an `Update`.
-    /// Store will hold on to the resulting `fx` publisher until it completes,
-    /// which in the case of long-lived services, could be until the
-    /// app is stopped.
     public var environment: Model.Environment
 
     public init(
