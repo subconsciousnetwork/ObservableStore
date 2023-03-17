@@ -7,24 +7,18 @@ import Foundation
 import Combine
 import SwiftUI
 
-/// Effect represents a unit of asyncronous work that returns an `Action` and
-/// never fails.
-///
-/// It's a wrapper for an async closure that can be passed around and
-/// manipulated.
-public struct Effect<Action> {
-    public var execute: () async -> Action
-    
-    public init(_ execute: @escaping () async -> Action) {
-        self.execute = execute
-    }
-    
-    /// Map an effect action to another type.
-    public func map<ViewAction>(
-        _ transform: @escaping (Action) -> ViewAction
-    ) -> Effect<ViewAction> {
-        Effect<ViewAction> {
-            await transform(self.execute())
+/// An effect is a `Task` who's value is an action, and that never fails.
+public typealias Effect<Action> = Task<Action, Never>
+
+public extension Task where Failure == Never {
+    /// Map a never-failing task to transform its `value`.
+    /// - Returns a new task for the transformed value.
+    func map<Transformed>(
+        _ transform: @escaping (Success) -> Transformed
+    ) -> Task<Transformed, Never> {
+        Task<Transformed, Never> {
+            let value = await self.value
+            return transform(value)
         }
     }
 }
@@ -255,7 +249,7 @@ where Model: ModelProtocol
     /// Run an effect and send result back to store.
     public func run(_ effect: Effect<Model.Action>) {
         Task {
-            let action = await effect.execute()
+            let action = await effect.value
             self.send(action)
         }
     }

@@ -7,9 +7,11 @@
 import XCTest
 import ObservableStore
 import Combine
+import os
 
 class UpdateActionsTests: XCTestCase {
     enum TestAction {
+        case message(String)
         case increment
         case setText(String)
         case delayedText(text: String, delay: Double)
@@ -17,9 +19,26 @@ class UpdateActionsTests: XCTestCase {
         case combo
     }
 
+    struct TestEnvironment {
+        let logger = Logger()
+
+        func delay<Action>(
+            succeed: Action,
+            fail: Action,
+            for duration: Duration
+        ) async -> Action {
+            do {
+                try await Task.sleep(for: duration)
+                return succeed
+            } catch {
+                return fail
+            }
+        }
+    }
+
     struct TestModel: ModelProtocol {
         typealias Action = TestAction
-        typealias Environment = Void
+        typealias Environment = TestEnvironment
 
         var count = 0
         var text = ""
@@ -27,32 +46,38 @@ class UpdateActionsTests: XCTestCase {
         static func update(
             state: TestModel,
             action: TestAction,
-            environment: Void
+            environment: Environment
         ) -> Update<TestModel> {
             switch action {
+            case .message(let message):
+                environment.logger.log("\(message)")
+                return Update(state: state)
             case .increment:
                 var model = state
                 model.count = model.count + 1
-                return Update(state: model)
-                    .animation(.default)
+                return Update(state: model, animation: .default)
             case .setText(let text):
                 var model = state
                 model.text = text
                 return Update(state: model)
             case let .delayedText(text, delay):
-                let fx: Effect<Action> = Just(
-                    Action.setText(text)
-                )
-                .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
-                .eraseToAnyPublisher()
-                return Update(state: state, fx: fx)
+                let fx = Effect {
+                    await environment.delay(
+                        succeed: Action.setText(text),
+                        fail: Action.message(".delayedText failed"),
+                        for: .seconds(delay)
+                    )
+                }
+                return Update(state: state, effect: fx)
             case let .delayedIncrement(delay):
-                let fx: Effect<Action> = Just(
-                    Action.increment
-                )
-                .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
-                .eraseToAnyPublisher()
-                return Update(state: state, fx: fx)
+                let fx = Effect {
+                    await environment.delay(
+                        succeed: Action.increment,
+                        fail: Action.message(".delayedIncrement failed"),
+                        for: .seconds(delay)
+                    )
+                }
+                return Update(state: state, effect: fx)
             case .combo:
                 return update(
                     state: state,
@@ -72,7 +97,7 @@ class UpdateActionsTests: XCTestCase {
     func testUpdateActions() throws {
         let store = Store(
             state: TestModel(),
-            environment: ()
+            environment: TestEnvironment()
         )
         store.send(.combo)
         let expectation = XCTestExpectation(
@@ -103,7 +128,7 @@ class UpdateActionsTests: XCTestCase {
                 .setText("Foo"),
                 .increment,
             ],
-            environment: ()
+            environment: TestEnvironment()
         )
         XCTAssertNotNil(next.transaction, "Last transaction wins")
     }
