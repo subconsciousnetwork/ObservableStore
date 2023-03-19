@@ -9,6 +9,7 @@ import XCTest
 import SwiftUI
 @testable import ObservableStore
 
+@MainActor
 final class BindingTests: XCTestCase {
     enum Action: Hashable {
         case setText(String)

@@ -7,18 +7,19 @@ import Foundation
 import Combine
 import SwiftUI
 
-/// An effect is a `Task` who's value is an action, and that never fails.
-public typealias Effect<Action> = Task<Action, Never>
+/// An effect can be run to produce an async `Action`, and never fails.
+public struct Effect<Action: Sendable> {
+    public var run: () async -> Action
+    
+    public init(_ run: @escaping () async -> Action) {
+        self.run = run
+    }
 
-public extension Task where Failure == Never {
-    /// Map a never-failing task to transform its `value`.
-    /// - Returns a new task for the transformed value.
-    func map<Transformed>(
-        _ transform: @escaping (Success) -> Transformed
-    ) -> Task<Transformed, Never> {
-        Task<Transformed, Never> {
-            let value = await self.value
-            return transform(value)
+    public func map<ViewAction>(
+        _ transform: @escaping (Action) -> ViewAction
+    ) -> Effect<ViewAction> {
+        Effect<ViewAction> {
+            await transform(self.run())
         }
     }
 }
@@ -183,9 +184,9 @@ public struct Update<Model: ModelProtocol> {
 public protocol StoreProtocol {
     associatedtype Model: ModelProtocol
 
-    var state: Model { get }
+    @MainActor var state: Model { get }
 
-    func send(_ action: Model.Action) -> Void
+    @MainActor func send(_ action: Model.Action) -> Void
 }
 
 /// Store is a source of truth for a state.
@@ -196,6 +197,7 @@ public protocol StoreProtocol {
 /// Store has a `@Published` `state` (typically a struct).
 /// All updates and effects to this state happen through actions
 /// sent to `store.send`.
+@MainActor
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
@@ -238,9 +240,9 @@ where Model: ModelProtocol
 
     /// Run an effect and send result back to store.
     public func run(_ effect: Effect<Model.Action>) {
-        Task {
-            let action = await effect.value
-            self.send(action)
+        Task.detached {
+            let action = await effect.run()
+            await self.send(action)
         }
     }
 
@@ -283,6 +285,7 @@ where Model: ModelProtocol
     }
 }
 
+@MainActor
 public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     private var _send: (ViewModel.Action) -> Void
     public var state: ViewModel
@@ -294,16 +297,10 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
         self.state = state
         self._send = send
     }
-        
-    public func send(_ action: ViewModel.Action) {
-        self._send(action)
-    }
-}
 
-extension ViewStore {
     public init<Action>(
         state: ViewModel,
-        send: @escaping (Action) -> Void,
+        send: @MainActor @escaping (Action) -> Void,
         tag: @escaping (ViewModel.Action) -> Action
     ) {
         self.init(
@@ -311,13 +308,18 @@ extension ViewStore {
             send: { action in send(tag(action)) }
         )
     }
+
+    public func send(_ action: ViewModel.Action) {
+        self._send(action)
+    }
 }
 
 extension StoreProtocol {
     /// Create a viewStore from a StoreProtocol
+    @MainActor
     public func viewStore<ViewModel: ModelProtocol>(
         get: (Self.Model) -> ViewModel,
-        tag: @escaping (ViewModel.Action) -> Self.Model.Action
+        tag:  @escaping (ViewModel.Action) -> Self.Model.Action
     ) -> ViewStore<ViewModel> {
         ViewStore(
             state: get(self.state),
@@ -331,8 +333,9 @@ public struct Address {
     /// Forward transform an address (send function) into a local address.
     /// View-scoped actions are tagged using `tag` before being forwarded to
     /// `send.`
+    @MainActor
     public static func forward<Action, ViewAction>(
-        send: @escaping (Action) -> Void,
+        send: @MainActor @escaping (Action) -> Void,
         tag: @escaping (ViewAction) -> Action
     ) -> (ViewAction) -> Void {
         { viewAction in send(tag(viewAction)) }
@@ -358,6 +361,7 @@ extension Binding {
 }
 
 extension StoreProtocol {
+    @MainActor
     public func binding<Value>(
         get: @escaping (Self.Model) -> Value,
         tag: @escaping (Value) -> Self.Model.Action

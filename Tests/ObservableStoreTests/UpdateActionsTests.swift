@@ -9,6 +9,7 @@ import ObservableStore
 import Combine
 import os
 
+@MainActor
 class UpdateActionsTests: XCTestCase {
     enum TestAction {
         case message(String)

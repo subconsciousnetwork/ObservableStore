@@ -10,6 +10,7 @@ import Combine
 import SwiftUI
 @testable import ObservableStore
 
+@MainActor
 class ComponentMappingTests: XCTestCase {
     enum ParentAction: Hashable {
         case child(ChildAction)

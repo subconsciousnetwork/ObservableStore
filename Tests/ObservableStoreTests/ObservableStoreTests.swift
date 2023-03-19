@@ -4,6 +4,7 @@ import SwiftUI
 import os
 @testable import ObservableStore
 
+@MainActor
 final class ObservableStoreTests: XCTestCase {
     /// App state
     struct AppModel: ModelProtocol {

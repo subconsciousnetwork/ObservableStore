@@ -9,6 +9,7 @@ import XCTest
 import SwiftUI
 @testable import ObservableStore
 
+@MainActor
 final class ViewStoreTests: XCTestCase {
     enum ParentAction: Hashable {
         case child(ChildAction)
