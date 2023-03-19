@@ -311,16 +311,16 @@ struct AppModel: ModelProtocol {
     var child = ChildModel()
 
     static func update(
-        get: AppChildCursor.get,
-        set: AppChildCursor.set,
-        tag: AppChildCursor.tag,
         state: AppModel,
         action: AppAction,
         environment: AppEnvironment
     ) -> Update<AppModel> {
         switch {
         case .child(let action):
-            return AppChildCursor.update(
+            return update(
+                get: AppChildCursor.get,
+                set: AppChildCursor.set,
+                tag: AppChildCursor.tag,
                 state: state,
                 action: action,
                 environment: ()
