@@ -8,6 +8,8 @@ import Combine
 import SwiftUI
 
 /// An effect can be run to produce an async `Action`, and never fails.
+/// It's conceptually like a lazy `Task` which does not decide its eventual
+/// actor context.
 public struct Effect<Action: Sendable> {
     public var run: () async -> Action
     
@@ -239,10 +241,9 @@ where Model: ModelProtocol
     }
 
     /// Run an effect and send result back to store.
-    public func run(_ effect: Effect<Model.Action>) {
+    nonisolated public func run(_ effect: Effect<Model.Action>) {
         Task.detached {
-            let action = await effect.run()
-            await self.send(action)
+            await self.send(effect.run())
         }
     }
 

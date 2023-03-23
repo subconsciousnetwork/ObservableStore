@@ -17,8 +17,8 @@ final class ObservableStoreTests: XCTestCase {
         }
         
         /// Services like API methods go here
-        struct Environment {
-            let logger = Logger()
+        actor Environment {
+            nonisolated let logger = Logger()
 
             func delay<Action>(
                 succeed: Action,
