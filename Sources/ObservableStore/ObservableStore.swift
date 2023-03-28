@@ -23,6 +23,16 @@ public protocol ModelProtocol: Equatable {
     ) -> Update<Self>
 }
 
+public protocol ModelFactoryProtocol: ModelProtocol {
+    associatedtype Flags
+
+    // Create a first update
+    static func create(
+        flags: Flags,
+        environment: Environment
+    ) -> Update<Self>
+}
+
 extension ModelProtocol {
     /// Update state through a sequence of actions, merging fx.
     /// - State updates happen immediately
@@ -294,6 +304,17 @@ where Model: ModelProtocol
         }
         // Run effect
         self.subscribe(to: next.fx)
+    }
+}
+
+extension Store where Model: ModelFactoryProtocol {
+    public convenience init(
+        flags: Model.Flags,
+        environment: Model.Environment
+    ) {
+        let update = Model.create(flags: flags, environment: environment)
+        self.init(state: update.state, environment: environment)
+        self.subscribe(to: update.fx)
     }
 }
 
