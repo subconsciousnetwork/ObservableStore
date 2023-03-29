@@ -93,6 +93,13 @@ extension ModelProtocol {
     }
 }
 
+public protocol ModelFactoryProtocol: ModelProtocol {
+    static func start(
+        state: Self,
+        environment: Self.Environment
+    ) -> Update<Self>
+}
+
 /// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
 public struct Update<Model: ModelProtocol> {
@@ -294,6 +301,17 @@ where Model: ModelProtocol
         }
         // Run effect
         self.subscribe(to: next.fx)
+    }
+}
+
+extension Store where Model: ModelFactoryProtocol {
+    public convenience init(
+        initial: Model,
+        environment: Model.Environment
+    ) {
+        let update = Model.start(state: initial, environment: environment)
+        self.init(state: update.state, environment: environment)
+        self.subscribe(to: update.fx)
     }
 }
 
