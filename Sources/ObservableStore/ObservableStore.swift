@@ -208,6 +208,18 @@ where Model: ModelProtocol
         self.send(action)
     }
 
+    /// Initialize with a closure that receives environment.
+    /// Useful when performing actions once and only once upon creation
+    /// of the store.
+    public convenience init(
+        create: (Model.Environment) -> Update<Model>,
+        environment: Model.Environment
+    ) {
+        let update = create(environment)
+        self.init(state: update.state, environment: environment)
+        self.subscribe(to: update.fx)
+    }
+
     /// Subscribe to a publisher of actions, piping them through to
     /// the store.
     ///
