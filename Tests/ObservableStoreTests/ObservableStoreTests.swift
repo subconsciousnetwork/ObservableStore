@@ -318,19 +318,6 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.2)
     }
     
-    func testInitialActionInit() throws {
-        let store = Store(
-            state: AppModel(),
-            action: .increment,
-            environment: AppModel.Environment()
-        )
-        XCTAssertEqual(
-            store.state.count,
-            1,
-            "action was sent to store during init"
-        )
-    }
-    
     func testCreateInit() throws {
         let store = Store(
             create: { environment in
@@ -359,7 +346,6 @@ final class ObservableStoreTests: XCTestCase {
     func testActionsPublisher() throws {
         let store = Store(
             state: AppModel(),
-            action: .increment,
             environment: AppModel.Environment()
         )
 
