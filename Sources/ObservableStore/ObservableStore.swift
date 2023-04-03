@@ -196,16 +196,16 @@ where Model: ModelProtocol
         self._actions = PassthroughSubject<Model.Action, Never>()
     }
 
-    /// Initialize and send an initial action to the store.
-    /// Useful when performing actions once and only once upon creation
-    /// of the store.
+    /// Initialize with a closure that receives environment.
+    /// Useful for initializing model properties from environment, and for
+    /// kicking off actions once at store creation.
     public convenience init(
-        state: Model,
-        action: Model.Action,
+        create: (Model.Environment) -> Update<Model>,
         environment: Model.Environment
     ) {
-        self.init(state: state, environment: environment)
-        self.send(action)
+        let update = create(environment)
+        self.init(state: update.state, environment: environment)
+        self.subscribe(to: update.fx)
     }
 
     /// Subscribe to a publisher of actions, piping them through to

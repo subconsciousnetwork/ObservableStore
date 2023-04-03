@@ -318,23 +318,34 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.2)
     }
     
-    func testInitialActionInit() throws {
+    func testCreateInit() throws {
         let store = Store(
-            state: AppModel(),
-            action: .increment,
+            create: { environment in
+                let model = AppModel(count: 1)
+                let fx = Just(AppModel.Action.increment).eraseToAnyPublisher()
+                return Update(state: model, fx: fx)
+            },
             environment: AppModel.Environment()
         )
-        XCTAssertEqual(
-            store.state.count,
-            1,
-            "action was sent to store during init"
+        let expectation = XCTestExpectation(
+            description: "Sent fx"
         )
+        DispatchQueue.main.async {
+            // Publisher should fire twice: once for initial state,
+            // once for state change.
+            XCTAssertEqual(
+                store.state.count,
+                2,
+                "Sent fx"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
     }
-    
+
     func testActionsPublisher() throws {
         let store = Store(
             state: AppModel(),
-            action: .increment,
             environment: AppModel.Environment()
         )
 
