@@ -10,6 +10,38 @@ import SwiftUI
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 
+/// Create a Combine Future from an async closure that never fails.
+/// Async actions are run in a task and fulfil the future's promise.
+public extension Future where Failure == Never {
+    convenience init(
+        priority: TaskPriority? = nil,
+        _ perform: @escaping () async -> Output
+    ) {
+        self.init { promise in
+            Task(priority: priority) {
+                let value = await perform()
+                promise(.success(value))
+            }
+        }
+    }
+}
+
+/// Create a Combine Future from an async closure that never fails.
+/// Async actions are run in a detatched task and fulfil the future's promise.
+public extension Future where Failure == Never {
+    static func detatched(
+        priority: TaskPriority? = nil,
+        perform: @escaping () async -> Output
+    ) -> Self {
+        self.init { promise in
+            Task.detached(priority: priority) {
+                let value = await perform()
+                promise(.success(value))
+            }
+        }
+    }
+}
+
 /// A model is an equatable type that knows how to create
 /// state `Updates` for itself via a static update function.
 public protocol ModelProtocol: Equatable {
@@ -111,13 +143,38 @@ public struct Update<Model: ModelProtocol> {
 
     public init(
         state: Model,
-        fx: Fx<Model.Action> = Empty(completeImmediately: true)
-            .eraseToAnyPublisher(),
-        transaction: Transaction? = nil
+        fx: Fx<Model.Action>,
+        transaction: Transaction?
     ) {
         self.state = state
         self.fx = fx
         self.transaction = transaction
+    }
+
+    public init(state: Model, animation: Animation? = nil) {
+        self.state = state
+        self.fx = Empty(completeImmediately: true).eraseToAnyPublisher()
+        self.transaction = Transaction(animation: animation)
+    }
+
+    public init(
+        state: Model,
+        fx: Fx<Model.Action>,
+        animation: Animation? = nil
+    ) {
+        self.state = state
+        self.fx = fx
+        self.transaction = Transaction(animation: animation)
+    }
+
+    public init(
+        state: Model,
+        future: Future<Model.Action, Never>,
+        animation: Animation? = nil
+    ) {
+        self.state = state
+        self.fx = future.eraseToAnyPublisher()
+        self.transaction = Transaction(animation: animation)
     }
 
     /// Merge existing fx together with new fx.
