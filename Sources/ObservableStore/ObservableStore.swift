@@ -10,38 +10,6 @@ import SwiftUI
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 
-/// Create a Combine Future from an async closure that never fails.
-/// Async actions are run in a task and fulfil the future's promise.
-public extension Future where Failure == Never {
-    convenience init(
-        priority: TaskPriority? = nil,
-        _ perform: @escaping () async -> Output
-    ) {
-        self.init { promise in
-            Task(priority: priority) {
-                let value = await perform()
-                promise(.success(value))
-            }
-        }
-    }
-}
-
-/// Create a Combine Future from an async closure that never fails.
-/// Async actions are run in a detatched task and fulfil the future's promise.
-public extension Future where Failure == Never {
-    static func detatched(
-        priority: TaskPriority? = nil,
-        perform: @escaping () async -> Output
-    ) -> Self {
-        self.init { promise in
-            Task.detached(priority: priority) {
-                let value = await perform()
-                promise(.success(value))
-            }
-        }
-    }
-}
-
 /// A model is an equatable type that knows how to create
 /// state `Updates` for itself via a static update function.
 public protocol ModelProtocol: Equatable {
@@ -164,16 +132,6 @@ public struct Update<Model: ModelProtocol> {
     ) {
         self.state = state
         self.fx = fx
-        self.transaction = Transaction(animation: animation)
-    }
-
-    public init(
-        state: Model,
-        future: Future<Model.Action, Never>,
-        animation: Animation? = nil
-    ) {
-        self.state = state
-        self.fx = future.eraseToAnyPublisher()
         self.transaction = Transaction(animation: animation)
     }
 
@@ -437,5 +395,85 @@ extension StoreProtocol {
             get: { get(self.state) },
             set: { value in self.send(tag(value)) }
         )
+    }
+}
+
+/// Create a Combine Future from an async closure that never fails.
+/// Async actions are run in a task and fulfil the future's promise.
+///
+/// This convenience init makes it easy to bridge async/await to Combine.
+/// You can call `.eraseToAnyPublisher()` on the resulting future to make it
+/// an `Fx`.
+public extension Future where Failure == Never {
+    convenience init(
+        priority: TaskPriority? = nil,
+        operation: @escaping () async -> Output
+    ) {
+        self.init { promise in
+            Task(priority: priority) {
+                let value = await operation()
+                promise(.success(value))
+            }
+        }
+    }
+}
+
+/// Create a Combine Future from an async closure that never fails.
+/// Async actions are run in a detached task and fulfil the future's promise.
+///
+/// This convenience init makes it easy to bridge async/await to Combine.
+/// You can call `.eraseToAnyPublisher()` on the resulting future to make it
+/// an `Fx`.
+public extension Future where Failure == Never {
+    static func detached(
+        priority: TaskPriority? = nil,
+        operation: @escaping () async -> Output
+    ) -> Self {
+        self.init { promise in
+            Task.detached(priority: priority) {
+                let value = await operation()
+                promise(.success(value))
+            }
+        }
+    }
+}
+
+/// Create a Combine Future from a throwing async closure.
+/// Async actions are run in a task and fulfil the future's promise.
+public extension Future where Failure == Error {
+    convenience init(
+        priority: TaskPriority? = nil,
+        operation: @escaping () async throws -> Output
+    ) {
+        self.init { promise in
+            Task(priority: priority) {
+                do {
+                    let value = try await operation()
+                    promise(.success(value))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
+    }
+}
+
+/// Create a Combine Future from a throwing async closure.
+/// Async actions are run in a detached task and fulfil the future's promise.
+public extension Future where Failure == Error {
+    static func detached(
+        priority: TaskPriority? = nil,
+        operation: @escaping () async throws -> Output
+    ) -> Self {
+        self.init { promise in
+            Task.detached(priority: priority) {
+                do {
+                    let value = try await operation()
+                    promise(.success(value))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
     }
 }

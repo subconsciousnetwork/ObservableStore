@@ -46,6 +46,12 @@ final class UpdateTests: XCTestCase {
     /// This test does nothing except try all initializers so Swift
     /// will complain if any of our initializers are ambiguous.
     func testInitializers() {
+        let _ = Update(
+            state: Model(),
+            fx: Just(.c).eraseToAnyPublisher(),
+            transaction: Transaction(animation: .default)
+        )
+
         let _ = Update(state: Model())
 
         let _ = Update(state: Model(), animation: .default)
@@ -57,19 +63,6 @@ final class UpdateTests: XCTestCase {
             fx: Just(.c).eraseToAnyPublisher(),
             animation: .default
         )
-
-        let future = Future {
-            do {
-                try await Task.sleep(nanoseconds: 1)
-            } catch {
-                return Action.a
-            }
-            return Action.b
-        }
-
-        let _ = Update(state: Model(), future: future)
-
-        let _ = Update(state: Model(), future: future, animation: .default)
 
         XCTAssertTrue(true)
     }
