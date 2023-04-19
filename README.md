@@ -113,18 +113,22 @@ Effects are modeled as [Combine Publishers](https://developer.apple.com/document
 public typealias Fx<Action> = AnyPublisher<Action, Never>
 ```
 
-The most common way to produce effects is by exposing methods on `Environment` that produce effects publishers. For example, an asynchronous call to an authentication API service might be implemented in `Environment`, where an effects publisher is used to signal whether authentication was successful.
+You can produce effects by exposing services or methods on `Environment` that produce Combine publishers.
+
+Another common approach is to make the environment (or some of its services) [actors](https://developer.apple.com/documentation/swift/actor). This has the advantage of getting work off the main thread.
 
 ```swift
-struct Environment {
+actor Environment {
     // ...
-    func authenticate(credentials: Credentials) -> AnyPublisher<Action, Never> {
-      // ...
+    func authenticate(credentials: Credentials) async -> Action {
+        // ...
     }
 }
 ```
 
-You can subscribe to an effects publisher by returning it as part of an Update:
+You can then wrap actor method calls in publishers. ObservableStore provides a helpful extension for this that allows you to construct a [Combine Future](https://developer.apple.com/documentation/combine/future) from an async closure.
+
+Here's an example of creating an effect using an environment actor and returning it as part of the update:
 
 ```swift
 func update(
@@ -135,10 +139,12 @@ func update(
     switch action {
     // ...
     case .authenticate(let credentials):
-        return Update(
-            state: state,
-            fx: environment.authenticate(credentials: credentials)
-        )
+        let fx = Future {
+            await environment.authenticate(credentials: credentials)
+        }
+        .eraseToAnyPublisher()
+        
+        return Update(state: state, fx: fx)
     }
 }
 ```
