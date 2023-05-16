@@ -2,7 +2,7 @@
 
 A simple Elm-like Store for SwiftUI, based on [ObservableObject](https://developer.apple.com/documentation/combine/observableobject).
 
-ObservableStore helps you craft more reliable apps by centralizing all of your application state into one place, and giving you a deterministic system for managing state changes and side-effects. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order. If you’ve ever used [Elm](https://guide.elm-lang.org/architecture/) or [Redux](https://redux.js.org/), you get the gist.
+ObservableStore helps you craft more reliable apps, by centralizing all of your application state into one place and giving you a deterministic system for managing state changes and side-effects. All state updates happen through actions passed to an update function. This guarantees your application will produce exactly the same state, given the same actions in the same order. If you’ve ever used [Elm](https://guide.elm-lang.org/architecture/) or [Redux](https://redux.js.org/), you get the gist.
 
 Because `Store` is an [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), it can be used anywhere in SwiftUI that ObservableObject would be used.
 
@@ -105,9 +105,9 @@ The `Update` returned is a small struct that contains a new state, plus any opti
 
 ## Effects
 
- Updates are also able to produce asynchronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This gives you a deterministic way to schedule sync and async side-effects like HTTP requests or database calls in response to actions.
+ Updates are also able to produce asynchronous effects via [Combine](https://developer.apple.com/documentation/combine) publishers. This gives you a deterministic way to schedule sync and async side-effects, like HTTP requests or database calls in response to actions.
  
-Effects are modeled as [Combine Publishers](https://developer.apple.com/documentation/combine/publishers) which publish actions and never fail. For convenience, ObservableStore defines a typealias for effect publishers:
+Effects are modeled as [Combine Publishers](https://developer.apple.com/documentation/combine/publishers), which publish actions and never fail. For convenience, ObservableStore defines a typealias for effect publishers:
 
 ```swift
 public typealias Fx<Action> = AnyPublisher<Action, Never>
@@ -149,7 +149,7 @@ func update(
 }
 ```
 
-Store will manage the lifecycle of any publishers returned by an Update, piping the actions they produce back into the store, producing new states, and cleaning them up when they complete.
+Store will manage the lifecycle of any publishers returned by an Update; piping the actions they produce back into the store, producing new states, and cleaning them up when they complete.
 
 ## Animations
 
@@ -183,7 +183,7 @@ There are a few different ways to work with Store in views.
 Text(store.state.text)
 ```
 
-`Store.send(_)` lets you send actions to the store to change state. You might call send within a button action, or event callback, for example.
+`Store.send(_)` lets you send actions to the store to change state. You might call send within a button action or event callback, for example.
 
 ```swift
 Button("Set color to red") {
@@ -193,7 +193,7 @@ Button("Set color to red") {
 
 ## Bindings
 
-`StoreProtocol.binding(get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of a store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, but changes state only through deterministic updates.
+`StoreProtocol.binding(get:tag:)` lets you create a [binding](https://developer.apple.com/documentation/swiftui/binding) that represents some part of a store state. The `get` closure reads the state into a value, and the `tag` closure wraps the value set on the binding in an action. The result is a binding that can be passed to any vanilla SwiftUI view, changing state only through deterministic updates.
 
 ```swift
 TextField(
@@ -205,7 +205,7 @@ TextField(
 )
 ```
 
-Bottom line, because Store is just an ordinary [ObservableObject](https://developer.apple.com/documentation/combine/observableobject), and can produce bindings, you can write views exactly the same way you write vanilla SwiftUI views. No special magic! Properties, [@Binding](https://developer.apple.com/documentation/swiftui/binding), [@ObservedObject](https://developer.apple.com/documentation/swiftui/observedobject), [@StateObject](https://developer.apple.com/documentation/swiftui/stateobject) and [@EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject) all work as you would expect.
+Bottom line, because Store is just an ordinary [ObservableObject](https://developer.apple.com/documentation/combine/observableobject) and can produce bindings, you can write views exactly the same way you write vanilla SwiftUI views. No special magic! Properties, [@Binding](https://developer.apple.com/documentation/swiftui/binding), [@ObservedObject](https://developer.apple.com/documentation/swiftui/observedobject), [@StateObject](https://developer.apple.com/documentation/swiftui/stateobject) and [@EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject) all work as you would expect.
 
 
 ## Creating scoped child components
@@ -259,7 +259,7 @@ To integrate this child component with a parent component, we're going to need 3
 - A function to `set` a local state on a root state
 - A function to `tag` a local action so it becomes a root action
 
-Together, these functions give us everything we need to map from child domain to a parent domain. Let's define them as static functions so we have them all in one place.
+Together, these functions give us everything we need to map from child domain to a parent domain. Let's define them as static functions, so we have them all in one place.
 
 ```swift
 struct AppChildCursor {
@@ -287,7 +287,7 @@ struct AppChildCursor {
 
 Ok, now that we have everything we need to map from the parent domain to the child domain, let's integrate the child view with the parent view.
 
-We call the `store.viewStore(get:tag:)` method to create a scoped ViewStore from our store, and pass it the appropriate cursor functions.
+We call the `store.viewStore(get:tag:)` method to create a scoped ViewStore from our store and pass it the appropriate cursor functions.
 
 ```swift
 struct ContentView: View {
