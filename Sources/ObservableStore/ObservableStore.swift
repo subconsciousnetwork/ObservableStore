@@ -160,6 +160,7 @@ where Model: ModelProtocol
     /// Initialize and send an initial action to the store.
     /// Useful when performing actions once and only once upon creation
     /// of the store.
+    @MainActor
     public convenience init(
         state: Model,
         action: Model.Action,
@@ -174,6 +175,7 @@ where Model: ModelProtocol
     ///
     /// Holds on to the cancellable until publisher completes.
     /// When publisher completes, removes cancellable.
+    @MainActor
     public func subscribe(to fx: Fx<Model.Action>) {
         // Create a UUID for the cancellable.
         // Store cancellable in dictionary by UUID.
@@ -222,9 +224,8 @@ where Model: ModelProtocol
     /// However it also means that publishers which run off-main-thread MUST
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
+    @MainActor
     public func send(_ action: Model.Action) {
-        /// Broadcast action to any outside subscribers
-        self._actions.send(action)
         // Generate next state and effect
         let next = Model.update(
             state: self.state,
@@ -253,6 +254,8 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
+        /// Broadcast action to any outside subscribers
+        self._actions.send(action)
         // Run effect
         self.subscribe(to: next.fx)
     }
