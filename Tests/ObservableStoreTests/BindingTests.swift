@@ -42,6 +42,7 @@ final class BindingTests: XCTestCase {
     }
     
     /// Test creating binding for an address
+    @MainActor
     func testBinding() throws {
         let store = Store(
             state: Model(),
@@ -70,6 +71,7 @@ final class BindingTests: XCTestCase {
     }
     
     /// Test creating binding for an address
+    @MainActor
     func testBindingMethod() throws {
         let store = Store(
             state: Model(),
