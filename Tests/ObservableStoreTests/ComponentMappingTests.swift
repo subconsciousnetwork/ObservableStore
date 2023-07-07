@@ -126,6 +126,7 @@ class ComponentMappingTests: XCTestCase {
         }
     }
     
+    @MainActor
     func testForward() throws {
         let store = Store(
             state: ParentModel(),
@@ -150,6 +151,7 @@ class ComponentMappingTests: XCTestCase {
         )
     }
     
+    @MainActor
     func testKeyedCursorUpdate() throws {
         let store = Store(
             state: ParentModel(
@@ -185,6 +187,7 @@ class ComponentMappingTests: XCTestCase {
         )
     }
     
+    @MainActor
     func testCursorUpdate() throws {
         let store = Store(
             state: ParentModel(),
@@ -203,6 +206,7 @@ class ComponentMappingTests: XCTestCase {
         )
     }
     
+    @MainActor
     func testKeyedCursorUpdateMissing() throws {
         let store = Store(
             state: ParentModel(

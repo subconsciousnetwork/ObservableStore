@@ -69,6 +69,7 @@ class UpdateActionsTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testUpdateActions() throws {
         let store = Store(
             state: TestModel(),

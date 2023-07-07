@@ -86,6 +86,7 @@ final class ObservableStoreTests: XCTestCase {
         self.cancellables = Set()
     }
     
+    @MainActor
     func testStateAdvance() throws {
         let store = Store(
             state: AppModel(),
@@ -100,6 +101,7 @@ final class ObservableStoreTests: XCTestCase {
     /// updates get removed from the cancellables array.
     /// 
     /// Failure to remove immediately-completing fx would cause a memory leak.
+    @MainActor
     func testEmptyFxRemovedOnComplete() {
         let store = Store(
             state: AppModel(),
@@ -133,6 +135,7 @@ final class ObservableStoreTests: XCTestCase {
     /// does not rely on an implementation detail of `Update` but instead
     /// tests this behavior directly, in case the implementation were to
     /// change somehow.
+    @MainActor
     func testEmptyFxThatCompleteImmiedatelyRemovedOnComplete() {
         let store = Store(
             state: AppModel(),
@@ -155,6 +158,7 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.1)
     }
 
+    @MainActor
     func testAsyncFxRemovedOnComplete() {
         let store = Store(
             state: AppModel(),
@@ -176,6 +180,7 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.5)
     }
     
+    @MainActor
     func testPublishedPropertyFires() throws {
         let store = Store(
             state: AppModel(),
@@ -207,6 +212,7 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.2)
     }
     
+    @MainActor
     func testStateOnlySetWhenNotEqual() {
         let store = Store(
             state: AppModel(),
@@ -286,6 +292,7 @@ final class ObservableStoreTests: XCTestCase {
         var subtitle: String = ""
     }
     
+    @MainActor
     func testUpdateMergeFx() {
         let store = Store(
             state: TestUpdateMergeFxState(),
@@ -318,6 +325,7 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.2)
     }
     
+    @MainActor
     func testCreateInit() throws {
         let store = Store(
             create: { environment in
@@ -343,6 +351,7 @@ final class ObservableStoreTests: XCTestCase {
         wait(for: [expectation], timeout: 0.1)
     }
 
+    @MainActor
     func testActionsPublisher() throws {
         let store = Store(
             state: AppModel(),

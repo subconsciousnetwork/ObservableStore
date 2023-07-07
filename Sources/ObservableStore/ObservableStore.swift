@@ -159,9 +159,9 @@ public struct Update<Model: ModelProtocol> {
 public protocol StoreProtocol {
     associatedtype Model: ModelProtocol
 
-    var state: Model { get }
+    @MainActor var state: Model { get }
 
-    func send(_ action: Model.Action) -> Void
+    @MainActor func send(_ action: Model.Action) -> Void
 }
 
 /// Store is a source of truth for a state.
@@ -172,6 +172,7 @@ public protocol StoreProtocol {
 /// Store has a `@Published` `state` (typically a struct).
 /// All updates and effects to this state happen through actions
 /// sent to `store.send`.
+@MainActor
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
@@ -312,6 +313,7 @@ where Model: ModelProtocol
     }
 }
 
+@MainActor
 public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     private var _send: (ViewModel.Action) -> Void
     public var state: ViewModel
@@ -344,6 +346,7 @@ extension ViewStore {
 
 extension StoreProtocol {
     /// Create a viewStore from a StoreProtocol
+    @MainActor
     public func viewStore<ViewModel: ModelProtocol>(
         get: (Self.Model) -> ViewModel,
         tag: @escaping (ViewModel.Action) -> Self.Model.Action
@@ -387,6 +390,7 @@ extension Binding {
 }
 
 extension StoreProtocol {
+    @MainActor
     public func binding<Value>(
         get: @escaping (Self.Model) -> Value,
         tag: @escaping (Value) -> Self.Model.Action

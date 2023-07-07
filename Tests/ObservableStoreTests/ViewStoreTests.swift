@@ -93,6 +93,7 @@ final class ViewStoreTests: XCTestCase {
     }
     
     /// Test creating binding for an address
+    @MainActor
     func testViewStore() throws {
         let store = Store(
             state: ParentModel(),
@@ -118,6 +119,7 @@ final class ViewStoreTests: XCTestCase {
     }
     
     /// Test creating binding for an address
+    @MainActor
     func testViewStoreMethod() throws {
         let store = Store(
             state: ParentModel(),
