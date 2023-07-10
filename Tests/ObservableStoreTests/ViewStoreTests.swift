@@ -74,7 +74,7 @@ final class ViewStoreTests: XCTestCase {
     struct ParentChildCursor {
         static let `default` = ParentChildCursor()
         
-        func get(_ state: ParentModel) -> ChildModel? {
+        func get(_ state: ParentModel) -> ChildModel {
             state.child
         }
         
@@ -100,8 +100,8 @@ final class ViewStoreTests: XCTestCase {
         )
         
         let viewStore = ViewStore(
-            state: store.state.child,
-            send: store.send,
+            store: store,
+            get: ParentChildCursor.default.get,
             tag: ParentChildCursor.default.tag
         )
         

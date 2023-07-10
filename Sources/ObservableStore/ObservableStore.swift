@@ -223,6 +223,18 @@ where Model: ModelProtocol
         self.subscribe(to: update.fx)
     }
 
+    /// Initialize and send an initial action to the store.
+    /// Useful when performing actions once and only once upon creation
+    /// of the store.
+    public convenience init(
+        state: Model,
+        action: Model.Action,
+        environment: Model.Environment
+    ) {
+        self.init(state: state, environment: environment)
+        self.send(action)
+    }
+
     /// Subscribe to a publisher of actions, piping them through to
     /// the store.
     ///
@@ -312,32 +324,55 @@ where Model: ModelProtocol
     }
 }
 
+/// Create a ViewStore, a scoped view over a store.
+/// ViewStore is conceptually like a SwiftUI Binding. However, instead of
+/// offering get/set for some source-of-truth, it offers a StoreProtocol.
+///
+/// Using ViewStore, you can create self-contained views that work with their
+/// own domain
 public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
+    /// `_get` reads some source of truth dynamically, using a closure.
+    ///
+    /// NOTE: We've found this to be important for some corner cases in
+    /// SwiftUI components, where capturing the state by value may produce
+    /// unexpected issues. Examples are input fields and NavigationStack,
+    /// which both expect a Binding to a state (which dynamically reads
+    /// the value using a closure). Using the same approach as Binding
+    /// offers the most reliable results.
+    private var _get: () -> ViewModel
     private var _send: (ViewModel.Action) -> Void
-    public var state: ViewModel
 
+    /// Initialize a ViewStore from a `get` closure and a `send` closure.
+    /// These closures read from a parent store to provide a type-erased
+    /// view over the store that only exposes domain-specific
+    /// model and actions.
     public init(
-        state: ViewModel,
+        get: @escaping () -> ViewModel,
         send: @escaping (ViewModel.Action) -> Void
     ) {
-        self.state = state
+        self._get = get
         self._send = send
     }
-        
+
+    public var state: ViewModel {
+        self._get()
+    }
+
     public func send(_ action: ViewModel.Action) {
         self._send(action)
     }
 }
 
 extension ViewStore {
-    public init<Action>(
-        state: ViewModel,
-        send: @escaping (Action) -> Void,
-        tag: @escaping (ViewModel.Action) -> Action
+    /// Initialize a ViewStore from a Store, using a `get` and `tag` closure.
+    public init<Store: StoreProtocol>(
+        store: Store,
+        get: @escaping (Store.Model) -> ViewModel,
+        tag: @escaping (ViewModel.Action) -> Store.Model.Action
     ) {
         self.init(
-            state: state,
-            send: { action in send(tag(action)) }
+            get: { get(store.state) },
+            send: { action in store.send(tag(action)) }
         )
     }
 }
@@ -345,12 +380,12 @@ extension ViewStore {
 extension StoreProtocol {
     /// Create a viewStore from a StoreProtocol
     public func viewStore<ViewModel: ModelProtocol>(
-        get: (Self.Model) -> ViewModel,
+        get: @escaping (Self.Model) -> ViewModel,
         tag: @escaping (ViewModel.Action) -> Self.Model.Action
     ) -> ViewStore<ViewModel> {
         ViewStore(
-            state: get(self.state),
-            send: self.send,
+            store: self,
+            get: get,
             tag: tag
         )
     }
