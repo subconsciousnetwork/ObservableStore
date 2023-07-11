@@ -223,6 +223,18 @@ where Model: ModelProtocol
         self.subscribe(to: update.fx)
     }
 
+    /// Initialize and send an initial action to the store.
+    /// Useful when performing actions once and only once upon creation
+    /// of the store.
+    public convenience init(
+        state: Model,
+        action: Model.Action,
+        environment: Model.Environment
+    ) {
+        self.init(state: state, environment: environment)
+        self.send(action)
+    }
+
     /// Subscribe to a publisher of actions, piping them through to
     /// the store.
     ///
@@ -312,32 +324,55 @@ where Model: ModelProtocol
     }
 }
 
+/// Create a ViewStore, a scoped view over a store.
+/// ViewStore is conceptually like a SwiftUI Binding. However, instead of
+/// offering get/set for some source-of-truth, it offers a StoreProtocol.
+///
+/// Using ViewStore, you can create self-contained views that work with their
+/// own domain
 public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
+    /// `_get` reads some source of truth dynamically, using a closure.
+    ///
+    /// NOTE: We've found this to be important for some corner cases in
+    /// SwiftUI components, where capturing the state by value may produce
+    /// unexpected issues. Examples are input fields and NavigationStack,
+    /// which both expect a Binding to a state (which dynamically reads
+    /// the value using a closure). Using the same approach as Binding
+    /// offers the most reliable results.
+    private var _get: () -> ViewModel
     private var _send: (ViewModel.Action) -> Void
-    public var state: ViewModel
 
+    /// Initialize a ViewStore from a `get` closure and a `send` closure.
+    /// These closures read from a parent store to provide a type-erased
+    /// view over the store that only exposes domain-specific
+    /// model and actions.
     public init(
-        state: ViewModel,
+        get: @escaping () -> ViewModel,
         send: @escaping (ViewModel.Action) -> Void
     ) {
-        self.state = state
+        self._get = get
         self._send = send
     }
-        
+
+    public var state: ViewModel {
+        self._get()
+    }
+
     public func send(_ action: ViewModel.Action) {
         self._send(action)
     }
 }
 
 extension ViewStore {
-    public init<Action>(
-        state: ViewModel,
-        send: @escaping (Action) -> Void,
-        tag: @escaping (ViewModel.Action) -> Action
+    /// Initialize a ViewStore from a Store, using a `get` and `tag` closure.
+    public init<Store: StoreProtocol>(
+        store: Store,
+        get: @escaping (Store.Model) -> ViewModel,
+        tag: @escaping (ViewModel.Action) -> Store.Model.Action
     ) {
         self.init(
-            state: state,
-            send: { action in send(tag(action)) }
+            get: { get(store.state) },
+            send: { action in store.send(tag(action)) }
         )
     }
 }
@@ -345,12 +380,12 @@ extension ViewStore {
 extension StoreProtocol {
     /// Create a viewStore from a StoreProtocol
     public func viewStore<ViewModel: ModelProtocol>(
-        get: (Self.Model) -> ViewModel,
+        get: @escaping (Self.Model) -> ViewModel,
         tag: @escaping (ViewModel.Action) -> Self.Model.Action
     ) -> ViewStore<ViewModel> {
         ViewStore(
-            state: get(self.state),
-            send: self.send,
+            store: self,
+            get: get,
             tag: tag
         )
     }
@@ -365,6 +400,139 @@ public struct Address {
         tag: @escaping (ViewAction) -> Action
     ) -> (ViewAction) -> Void {
         { viewAction in send(tag(viewAction)) }
+    }
+}
+
+/// A cursor provides a complete description of how to map from one component
+/// domain to another.
+public protocol CursorProtocol {
+    associatedtype Model: ModelProtocol
+    associatedtype ViewModel: ModelProtocol
+
+    /// Get an inner state from an outer state
+    static func get(state: Model) -> ViewModel
+
+    /// Set an inner state on an outer state, returning an outer state
+    static func set(state: Model, inner: ViewModel) -> Model
+
+    /// Tag an inner action, transforming it into an outer action
+    static func tag(_ action: ViewModel.Action) -> Model.Action
+}
+
+extension CursorProtocol {
+    /// Update an outer state through a cursor.
+    /// CursorProtocol.update offers a convenient way to call child
+    /// update functions from the parent domain, and get parent-domain
+    /// states and actions back from it.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - Returns a new outer state
+    @available(
+        *,
+        deprecated,
+        message: "CursorProtocol is depreacated and will be removed in a future update. Use ModelProtocol.update(get:set:tag:state:action:environment:) instead."
+    )
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment: ViewModel.Environment
+    ) -> Update<Model> {
+        let next = ViewModel.update(
+            state: get(state: state),
+            action: viewAction,
+            environment: environment
+        )
+        return Update(
+            state: set(state: state, inner: next.state),
+            fx: next.fx.map(tag).eraseToAnyPublisher(),
+            transaction: next.transaction
+        )
+    }
+}
+
+public protocol KeyedCursorProtocol {
+    associatedtype Key
+    associatedtype Model: ModelProtocol
+    associatedtype ViewModel: ModelProtocol
+
+    /// Get an inner state from an outer state
+    static func get(state: Model, key: Key) -> ViewModel?
+
+    /// Set an inner state on an outer state, returning an outer state
+    static func set(state: Model, inner: ViewModel, key: Key) -> Model
+
+    /// Tag an inner action, transforming it into an outer action
+    static func tag(action: ViewModel.Action, key: Key) -> Model.Action
+}
+
+extension KeyedCursorProtocol {
+    /// Update an inner state within an outer state through a keyed cursor.
+    /// This cursor type is useful when looking up children in dynamic lists
+    /// such as arrays or dictionaries.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - `key` a key uniquely representing this model in the parent domain
+    /// - Returns an update for a new outer state or nil
+    @available(
+        *,
+        deprecated,
+        message: "KeyedCursorProtocol is depreacated and will be removed in a future update. Use ModelProtocol.update(get:set:tag:state:action:environment:) instead."
+    )
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment viewEnvironment: ViewModel.Environment,
+        key: Key
+    ) -> Update<Model>? {
+        guard let viewModel = get(state: state, key: key) else {
+            return nil
+        }
+        let next = ViewModel.update(
+            state: viewModel,
+            action: viewAction,
+            environment: viewEnvironment
+        )
+        return Update(
+            state: set(state: state, inner: next.state, key: key),
+            fx: next.fx
+                .map({ viewAction in Self.tag(action: viewAction, key: key) })
+                .eraseToAnyPublisher(),
+            transaction: next.transaction
+        )
+    }
+
+    /// Update an inner state within an outer state through a keyed cursor.
+    /// This cursor type is useful when looking up children in dynamic lists
+    /// such as arrays or dictionaries.
+    ///
+    /// This version of update always returns an `Update`. If the child model
+    /// cannot be found at key, then it returns an update for the same state
+    /// (noop), effectively ignoring the action.
+    ///
+    /// - `state` the outer state
+    /// - `action` the inner action
+    /// - `environment` the environment for the update function
+    /// - `key` a key uniquely representing this model in the parent domain
+    /// - Returns an update for a new outer state or nil
+    public static func update(
+        state: Model,
+        action viewAction: ViewModel.Action,
+        environment viewEnvironment: ViewModel.Environment,
+        key: Key
+    ) -> Update<Model> {
+        guard let next = update(
+            state: state,
+            action: viewAction,
+            environment: viewEnvironment,
+            key: key
+        ) else {
+            return Update(state: state)
+        }
+        return next
     }
 }
 
