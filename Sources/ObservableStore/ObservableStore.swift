@@ -330,7 +330,8 @@ where Model: ModelProtocol
 ///
 /// Using ViewStore, you can create self-contained views that work with their
 /// own domain
-public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
+public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol, DynamicProperty {
+    private var _state: State<ViewModel>
     /// `_get` reads some source of truth dynamically, using a closure.
     ///
     /// NOTE: We've found this to be important for some corner cases in
@@ -350,6 +351,7 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
         get: @escaping () -> ViewModel,
         send: @escaping (ViewModel.Action) -> Void
     ) {
+        self._state = State(initialValue: get())
         self._get = get
         self._send = send
     }
@@ -360,6 +362,10 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
 
     public func send(_ action: ViewModel.Action) {
         self._send(action)
+    }
+    
+    public func update() {
+        self._state.wrappedValue = self._get()
     }
 }
 
