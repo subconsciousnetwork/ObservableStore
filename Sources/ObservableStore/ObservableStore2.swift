@@ -23,8 +23,10 @@ public protocol ModelProtocol2 {
     @ObservationIgnored
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
     
-    var state: Model
-    var environment: Model.Environment
+    @ObservationIgnored
+    public var environment: Model.Environment
+    
+    public var state: Model
     
     public init(
         state: Model,
