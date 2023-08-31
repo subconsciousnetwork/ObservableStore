@@ -429,11 +429,6 @@ extension CursorProtocol {
     /// - `action` the inner action
     /// - `environment` the environment for the update function
     /// - Returns a new outer state
-    @available(
-        *,
-        deprecated,
-        message: "CursorProtocol is depreacated and will be removed in a future update. Use ModelProtocol.update(get:set:tag:state:action:environment:) instead."
-    )
     public static func update(
         state: Model,
         action viewAction: ViewModel.Action,
@@ -477,11 +472,6 @@ extension KeyedCursorProtocol {
     /// - `environment` the environment for the update function
     /// - `key` a key uniquely representing this model in the parent domain
     /// - Returns an update for a new outer state or nil
-    @available(
-        *,
-        deprecated,
-        message: "KeyedCursorProtocol is depreacated and will be removed in a future update. Use ModelProtocol.update(get:set:tag:state:action:environment:) instead."
-    )
     public static func update(
         state: Model,
         action viewAction: ViewModel.Action,
