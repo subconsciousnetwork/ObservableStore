@@ -164,6 +164,15 @@ public protocol StoreProtocol {
     func send(_ action: Model.Action) -> Void
 }
 
+/// A receipt representing a discrete state transaction.
+/// The transaction may or may not change the state.
+public struct StateTransaction<Model: ModelProtocol> {
+    /// The new state
+    let state: Model
+    /// The action that caused the state change
+    let cause: Model.Action
+}
+
 /// Store is a source of truth for a state.
 ///
 /// Store is an `ObservableObject`. You can use it in a view via
@@ -177,12 +186,16 @@ where Model: ModelProtocol
 {
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
+
     /// Private for all actions sent to the store.
-    private var _actions: PassthroughSubject<Model.Action, Never>
-    /// Publisher for all actions sent to the store.
-    public var actions: AnyPublisher<Model.Action, Never> {
-        _actions.eraseToAnyPublisher()
+    private var _transactions:
+        PassthroughSubject<StateTransaction<Model>, Never>
+
+    /// Publisher for all state changes performed on the store
+    public var transactions: AnyPublisher<StateTransaction<Model>, Never> {
+        _transactions.eraseToAnyPublisher()
     }
+
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
     @Published public private(set) var state: Model
@@ -208,7 +221,8 @@ where Model: ModelProtocol
     ) {
         self.state = state
         self.environment = environment
-        self._actions = PassthroughSubject<Model.Action, Never>()
+        self._transactions =
+            PassthroughSubject<StateTransaction<Model>, Never>()
     }
 
     /// Initialize with a closure that receives environment.
@@ -289,8 +303,6 @@ where Model: ModelProtocol
     /// make sure that they join the main thread (e.g. with
     /// `.receive(on: DispatchQueue.main)`).
     public func send(_ action: Model.Action) {
-        /// Broadcast action to any outside subscribers
-        self._actions.send(action)
         // Generate next state and effect
         let next = Model.update(
             state: self.state,
@@ -319,8 +331,21 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
+
+        /// Broadcast change to any subscribers
+        self._transactions.send(
+            StateTransaction(state: self.state, cause: action)
+        )
+
         // Run effect
         self.subscribe(to: next.fx)
+    }
+}
+
+extension Store {
+    /// Publisher for all actions sent to the store.
+    public var actions: AnyPublisher<Model.Action, Never> {
+        _transactions.map(\.cause).eraseToAnyPublisher()
     }
 }
 
