@@ -168,9 +168,9 @@ public protocol StoreProtocol {
 /// The transaction may or may not change the state.
 public struct StateTransaction<Model: ModelProtocol> {
     /// The new state
-    let state: Model
+    public let state: Model
     /// The action that caused the state change
-    let cause: Model.Action
+    public let cause: Model.Action
 }
 
 /// Store is a source of truth for a state.
