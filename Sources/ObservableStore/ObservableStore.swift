@@ -257,23 +257,17 @@ where Model: ModelProtocol
     /// app is stopped.
     public var environment: Model.Environment
 
-    private var logger: Logger
-    /// Enable logging? Logs all actions sent to store.
-    public var enableLogging: Bool
+    /// Logger to log actions sent to store.
+    private var logger: Logger?
 
     public init(
         state: Model,
         environment: Model.Environment,
-        enableLogging: Bool = false,
-        logger: Logger = Logger(
-            subsystem: "ObservableStore",
-            category: "Store"
-        )
+        logger: Logger? = nil
     ) {
         self.state = state
         self.environment = environment
         self.logger = logger
-        self.enableLogging = enableLogging
 
         self.cancelFx = self.fx
             .sink(receiveValue: { [weak self] action in
@@ -286,10 +280,15 @@ where Model: ModelProtocol
     /// kicking off actions once at store creation.
     public convenience init(
         create: (Model.Environment) -> Update<Model>,
-        environment: Model.Environment
+        environment: Model.Environment,
+        logger: Logger? = nil
     ) {
         let update = create(environment)
-        self.init(state: update.state, environment: environment)
+        self.init(
+            state: update.state,
+            environment: environment,
+            logger: logger
+        )
         self.subscribe(to: update.fx)
     }
 
@@ -299,9 +298,14 @@ where Model: ModelProtocol
     public convenience init(
         state: Model,
         action: Model.Action,
-        environment: Model.Environment
+        environment: Model.Environment,
+        logger: Logger? = nil
     ) {
-        self.init(state: state, environment: environment)
+        self.init(
+            state: state,
+            environment: environment,
+            logger: logger
+        )
         self.send(action)
     }
 
@@ -318,7 +322,7 @@ where Model: ModelProtocol
     /// `send(_:)` is run *synchronously*. It is up to you to guarantee it is
     /// run on main thread when SwiftUI is being used.
     public func send(_ action: Model.Action) {
-        if (enableLogging) {
+        if let logger = logger {
             logger.log("Action: \(String(describing: action))")
         }
 
