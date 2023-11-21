@@ -16,15 +16,16 @@ public typealias Fx<Action> = AnyPublisher<Action, Never>
 public protocol ModelProtocol: Equatable {
     associatedtype Action
     associatedtype Environment
-    associatedtype Update: UpdateProtocol where
-        Update.Model == Self,
-        Update.Action == Self.Action
+
+    associatedtype UpdateType: UpdateProtocol where
+        UpdateType.Model == Self,
+        UpdateType.Action == Self.Action
 
     static func update(
         state: Self,
         action: Action,
         environment: Environment
-    ) -> Update
+    ) -> UpdateType
 }
 
 extension ModelProtocol {
@@ -39,16 +40,16 @@ extension ModelProtocol {
         state: Self,
         actions: [Action],
         environment: Environment
-    ) -> Update {
+    ) -> UpdateType {
         actions.reduce(
-            Update(state: state),
+            UpdateType(state: state),
             { result, action in
                 let next = update(
                     state: result.state,
                     action: action,
                     environment: environment
                 )
-                return Update(
+                return UpdateType(
                     state: next.state,
                     fx: result.fx.merge(with: next.fx).eraseToAnyPublisher(),
                     transaction: next.transaction
@@ -78,18 +79,18 @@ extension ModelProtocol {
         state: Self,
         action viewAction: ViewModel.Action,
         environment: ViewModel.Environment
-    ) -> Update {
+    ) -> UpdateType {
         // If getter returns nil (as in case of a list item that no longer
         // exists), do nothing.
         guard let inner = get(state) else {
-            return Update(state: state)
+            return UpdateType(state: state)
         }
         let next = ViewModel.update(
             state: inner,
             action: viewAction,
             environment: environment
         )
-        return Update(
+        return UpdateType(
             state: set(state, next.state),
             fx: next.fx.map(tag).eraseToAnyPublisher(),
             transaction: next.transaction
@@ -228,11 +229,11 @@ where Model: ModelProtocol
     }
     
     /// Publisher for updates performed on state
-    private var _updates = PassthroughSubject<Model.Update, Never>()
+    private var _updates = PassthroughSubject<Model.UpdateType, Never>()
 
     /// Publisher for updates performed on state.
     /// `updates` is guaranteed to fire after the state has changed.
-    public var updates: AnyPublisher<Model.Update, Never> {
+    public var updates: AnyPublisher<Model.UpdateType, Never> {
         _updates.eraseToAnyPublisher()
     }
 
