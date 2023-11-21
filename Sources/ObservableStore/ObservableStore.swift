@@ -164,6 +164,29 @@ public protocol StoreProtocol {
     func send(_ action: Model.Action) -> Void
 }
 
+/// Manages batches of fx, running each batch until it is complete.
+public final class FxRunner<Action> {
+    /// Publisher containing fx publishers.
+    private var batches = PassthroughSubject<
+        AnyPublisher<Action, Never>,
+        Never
+    >()
+
+    /// `fx` represents a flat stream of actions from all fx publishers.
+    public let fx: AnyPublisher<Action, Never>
+    
+    public init() {
+        self.fx = batches
+            .flatMap({ publisher in publisher })
+            .eraseToAnyPublisher()
+    }
+    
+    /// Subscribe to this fx, publishing its values to `self.fx`
+    public func subscribe(to fx: AnyPublisher<Action, Never>) {
+        batches.send(fx)
+    }
+}
+
 /// Store is a source of truth for a state.
 ///
 /// Store is an `ObservableObject`. You can use it in a view via
@@ -175,10 +198,15 @@ public protocol StoreProtocol {
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
-    /// Stores cancellables by ID
-    private(set) var cancellables: [UUID: AnyCancellable] = [:]
+    private var runner = FxRunner<Model.Action>()
+    
+    private var cancelTransactions: AnyCancellable?
+    /// Cancellable for fx subscription.
+    private var cancelFx: AnyCancellable?
+
     /// Private for all actions sent to the store.
-    private var _actions: PassthroughSubject<Model.Action, Never>
+    private var _actions = PassthroughSubject<Model.Action, Never>()
+    
     /// Publisher for all actions sent to the store.
     public var actions: AnyPublisher<Model.Action, Never> {
         _actions.eraseToAnyPublisher()
@@ -208,7 +236,17 @@ where Model: ModelProtocol
     ) {
         self.state = state
         self.environment = environment
-        self._actions = PassthroughSubject<Model.Action, Never>()
+
+        self.cancelTransactions = actions
+            .receive(on: DispatchQueue.main)
+            .sink(receiveValue: { [weak self ] action in
+                self?.transact(action)
+            })
+        
+        self.cancelFx = runner.fx
+            .sink(receiveValue: { [weak self] action in
+                self?.send(action)
+            })
     }
 
     /// Initialize with a closure that receives environment.
@@ -220,7 +258,7 @@ where Model: ModelProtocol
     ) {
         let update = create(environment)
         self.init(state: update.state, environment: environment)
-        self.subscribe(to: update.fx)
+        self.runner.subscribe(to: update.fx)
     }
 
     /// Initialize and send an initial action to the store.
@@ -234,64 +272,9 @@ where Model: ModelProtocol
         self.init(state: state, environment: environment)
         self.send(action)
     }
-
-    /// Subscribe to a publisher of actions, piping them through to
-    /// the store.
-    ///
-    /// Holds on to the cancellable until publisher completes.
-    /// When publisher completes, removes cancellable.
-    public func subscribe(to fx: Fx<Model.Action>) {
-        // Create a UUID for the cancellable.
-        // Store cancellable in dictionary by UUID.
-        // Remove cancellable from dictionary upon effect completion.
-        // This retains the effect pipeline for as long as it takes to complete
-        // the effect, and then removes it, so we don't have a cancellables
-        // memory leak.
-        let id = UUID()
-
-        // Receive Fx on main thread. This does two important things:
-        //
-        // First, SwiftUI requires that any state mutations that would change
-        // views happen on the main thread. Receiving on main ensures that
-        // all fx-driven state transitions happen on main, even if the
-        // publisher is off-main-thread.
-        //
-        // Second, if we didn't schedule receive on main, it would be possible
-        // for publishers to complete immediately, causing receiveCompletion
-        // to attempt to remove the publisher from `cancellables` before
-        // it is added. By scheduling to receive publisher on main,
-        // we force publisher to complete on next tick, ensuring that it
-        // is always first added, then removed from `cancellables`.
-        let cancellable = fx
-            .receive(
-                on: DispatchQueue.main,
-                options: .init(qos: .default)
-            )
-            .sink(
-                receiveCompletion: { [weak self] _ in
-                    self?.cancellables.removeValue(forKey: id)
-                },
-                receiveValue: { [weak self] action in
-                    self?.send(action)
-                }
-            )
-        self.cancellables[id] = cancellable
-    }
-
-    /// Send an action to the store to update state and generate effects.
-    /// Any effects generated are fed back into the store.
-    ///
-    /// Note: SwiftUI requires that all UI changes happen on main thread.
-    /// We run effects as-given, without forcing them on to main thread.
-    /// This means that main-thread effects will be run immediately, enabling
-    /// you to drive things like withAnimation via actions.
-    /// However it also means that publishers which run off-main-thread MUST
-    /// make sure that they join the main thread (e.g. with
-    /// `.receive(on: DispatchQueue.main)`).
-    public func send(_ action: Model.Action) {
-        /// Broadcast action to any outside subscribers
-        self._actions.send(action)
-        // Generate next state and effect
+    
+    private func transact(_ action: Model.Action) {
+        // Generate next state and effects
         let next = Model.update(
             state: self.state,
             action: action,
@@ -319,8 +302,22 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
-        // Run effect
-        self.subscribe(to: next.fx)
+        // Run effects
+        self.runner.subscribe(to: next.fx)
+    }
+
+    /// Send an action to the store to update state and generate effects.
+    /// Any effects generated are fed back into the store.
+    ///
+    /// Note: SwiftUI requires that all UI changes happen on main thread.
+    /// We run effects as-given, without forcing them on to main thread.
+    /// This means that main-thread effects will be run immediately, enabling
+    /// you to drive things like withAnimation via actions.
+    /// However it also means that publishers which run off-main-thread MUST
+    /// make sure that they join the main thread (e.g. with
+    /// `.receive(on: DispatchQueue.main)`).
+    public func send(_ action: Model.Action) {
+        self._actions.send(action)
     }
 }
 

@@ -42,7 +42,7 @@ final class BindingTests: XCTestCase {
     }
     
     /// Test creating binding for an address
-    func testBinding() throws {
+    func testBinding() async throws {
         let store = Store(
             state: Model(),
             environment: ()
@@ -59,6 +59,8 @@ final class BindingTests: XCTestCase {
         view.text = "Foo"
         view.text = "Bar"
         
+        try await Task.sleep(for: .seconds(0.1))
+
         XCTAssertEqual(
             store.state.text,
             "Bar"
@@ -70,7 +72,7 @@ final class BindingTests: XCTestCase {
     }
     
     /// Test creating binding for an address
-    func testBindingMethod() throws {
+    func testBindingMethod() async throws {
         let store = Store(
             state: Model(),
             environment: ()
@@ -85,7 +87,9 @@ final class BindingTests: XCTestCase {
 
         view.text = "Foo"
         view.text = "Bar"
-
+        
+        try await Task.sleep(for: .seconds(0.1))
+        
         XCTAssertEqual(
             store.state.text,
             "Bar"

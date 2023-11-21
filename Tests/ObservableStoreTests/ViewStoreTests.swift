@@ -93,7 +93,7 @@ final class ViewStoreTests: XCTestCase {
     }
     
     /// Test creating binding for an address
-    func testViewStore() throws {
+    func testViewStore() async throws {
         let store = Store(
             state: ParentModel(),
             environment: ()
@@ -107,6 +107,8 @@ final class ViewStoreTests: XCTestCase {
         
         viewStore.send(.setText("Foo"))
         
+        try await Task.sleep(for: .seconds(0.1))
+
         XCTAssertEqual(
             store.state.child.text,
             "Foo"
@@ -118,7 +120,7 @@ final class ViewStoreTests: XCTestCase {
     }
     
     /// Test creating binding for an address
-    func testViewStoreMethod() throws {
+    func testViewStoreMethod() async throws {
         let store = Store(
             state: ParentModel(),
             environment: ()
@@ -130,6 +132,8 @@ final class ViewStoreTests: XCTestCase {
         )
         
         viewStore.send(.setText("Foo"))
+        
+        try await Task.sleep(for: .seconds(0.1))
         
         XCTAssertEqual(
             store.state.child.text,
