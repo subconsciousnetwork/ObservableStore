@@ -241,6 +241,7 @@ where Model: ModelProtocol
             })
         
         self.cancelFx = runner.fx
+            .receive(on: DispatchQueue.main)
             .sink(receiveValue: { [weak self] action in
                 self?.send(action)
             })

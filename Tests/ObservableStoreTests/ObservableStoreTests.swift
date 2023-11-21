@@ -253,7 +253,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "Sent fx"
         )
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             // Publisher should fire twice: once for initial state,
             // once for state change.
             XCTAssertEqual(
@@ -263,7 +263,7 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 0.1)
+        wait(for: [expectation], timeout: 1)
     }
 
     func testActionsPublisher() throws {
