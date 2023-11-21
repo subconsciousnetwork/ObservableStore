@@ -167,13 +167,10 @@ public protocol StoreProtocol {
 /// Manages batches of fx, running each batch until it is complete.
 public final class FxRunner<Action> {
     /// Publisher containing fx publishers.
-    private var batches = PassthroughSubject<
-        AnyPublisher<Action, Never>,
-        Never
-    >()
+    private var batches = PassthroughSubject<Fx<Action>, Never>()
 
     /// `fx` represents a flat stream of actions from all fx publishers.
-    public let fx: AnyPublisher<Action, Never>
+    public let fx: Fx<Action>
     
     public init() {
         self.fx = batches
@@ -182,7 +179,7 @@ public final class FxRunner<Action> {
     }
     
     /// Subscribe to this fx, publishing its values to `self.fx`
-    public func subscribe(to fx: AnyPublisher<Action, Never>) {
+    public func subscribe(to fx: Fx<Action>) {
         batches.send(fx)
     }
 }
@@ -258,7 +255,7 @@ where Model: ModelProtocol
     ) {
         let update = create(environment)
         self.init(state: update.state, environment: environment)
-        self.runner.subscribe(to: update.fx)
+        self.subscribe(to: update.fx)
     }
 
     /// Initialize and send an initial action to the store.
@@ -303,7 +300,13 @@ where Model: ModelProtocol
             }
         }
         // Run effects
-        self.runner.subscribe(to: next.fx)
+        self.subscribe(to: next.fx)
+    }
+
+    /// Subscribe to a publisher of actions, send the actions it publishes
+    /// to the store.
+    public func subscribe(to fx: Fx<Model.Action>) {
+        self.runner.subscribe(to: fx)
     }
 
     /// Send an action to the store to update state and generate effects.
