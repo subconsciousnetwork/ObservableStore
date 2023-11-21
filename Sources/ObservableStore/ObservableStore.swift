@@ -15,12 +15,15 @@ public typealias Fx<Action> = AnyPublisher<Action, Never>
 public protocol ModelProtocol: Equatable {
     associatedtype Action
     associatedtype Environment
+    associatedtype Update: UpdateProtocol where
+        Update.Model == Self,
+        Update.Action == Self.Action
 
     static func update(
         state: Self,
         action: Action,
         environment: Environment
-    ) -> Update<Self>
+    ) -> Update
 }
 
 extension ModelProtocol {
@@ -35,7 +38,7 @@ extension ModelProtocol {
         state: Self,
         actions: [Action],
         environment: Environment
-    ) -> Update<Self> {
+    ) -> Update {
         actions.reduce(
             Update(state: state),
             { result, action in
@@ -74,7 +77,7 @@ extension ModelProtocol {
         state: Self,
         action viewAction: ViewModel.Action,
         environment: ViewModel.Environment
-    ) -> Update<Self> {
+    ) -> Update {
         // If getter returns nil (as in case of a list item that no longer
         // exists), do nothing.
         guard let inner = get(state) else {
@@ -93,9 +96,66 @@ extension ModelProtocol {
     }
 }
 
+/// `UpdateProtocol` represents a state change, together with an `Fx` publisher,
+/// and an optional `Transaction`.
+public protocol UpdateProtocol {
+    associatedtype Model
+    associatedtype Action
+    
+    init(
+        state: Model,
+        fx: Fx<Action>,
+        transaction: Transaction?
+    )
+
+    var state: Model { get set }
+    var fx: Fx<Action> { get set }
+    var transaction: Transaction? { get set }
+}
+
+extension UpdateProtocol {
+    public init(state: Model, animation: Animation? = nil) {
+        self.init(
+            state: state,
+            fx: Empty(completeImmediately: true).eraseToAnyPublisher(),
+            transaction: Transaction(animation: animation)
+        )
+    }
+    
+    public init(
+        state: Model,
+        fx: Fx<Action>,
+        animation: Animation? = nil
+    ) {
+        self.init(
+            state: state,
+            fx: fx,
+            transaction: Transaction(animation: animation)
+        )
+    }
+    
+    /// Merge existing fx together with new fx.
+    /// - Returns a new `Update`
+    public func mergeFx(_ fx: Fx<Action>) -> Self {
+        var this = self
+        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
+        return this
+    }
+
+    /// Set explicit animation for this update.
+    /// Sets new transaction with specified animation.
+    /// - Returns a new `Update`
+    public func animation(_ animation: Animation? = .default) -> Self {
+        var this = self
+        this.transaction = Transaction(animation: animation)
+        return this
+    }
+}
+
+/// Concrete implementation of `UpdateProtocol`.
 /// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<Model: ModelProtocol> {
+public struct Update<Model: ModelProtocol>: UpdateProtocol {
     /// `State` for this update
     public var state: Model
     /// `Fx` for this update.
@@ -117,39 +177,6 @@ public struct Update<Model: ModelProtocol> {
         self.state = state
         self.fx = fx
         self.transaction = transaction
-    }
-
-    public init(state: Model, animation: Animation? = nil) {
-        self.state = state
-        self.fx = Empty(completeImmediately: true).eraseToAnyPublisher()
-        self.transaction = Transaction(animation: animation)
-    }
-
-    public init(
-        state: Model,
-        fx: Fx<Model.Action>,
-        animation: Animation? = nil
-    ) {
-        self.state = state
-        self.fx = fx
-        self.transaction = Transaction(animation: animation)
-    }
-
-    /// Merge existing fx together with new fx.
-    /// - Returns a new `Update`
-    public func mergeFx(_ fx: Fx<Model.Action>) -> Update<Model> {
-        var this = self
-        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
-        return this
-    }
-
-    /// Set explicit animation for this update.
-    /// Sets new transaction with specified animation.
-    /// - Returns a new `Update`
-    public func animation(_ animation: Animation? = .default) -> Self {
-        var this = self
-        this.transaction = Transaction(animation: animation)
-        return this
     }
 }
 
