@@ -126,7 +126,7 @@ class ComponentMappingTests: XCTestCase {
         }
     }
     
-    func testForward() async throws {
+    func testForward() throws {
         let store = Store(
             state: ParentModel(),
             environment: ()
@@ -139,8 +139,6 @@ class ComponentMappingTests: XCTestCase {
         
         send(.setText("Foo"))
         send(.setText("Bar"))
-        
-        try await Task.sleep(for: .seconds(0.1))
 
         XCTAssertEqual(
             store.state.child.text,
@@ -152,7 +150,7 @@ class ComponentMappingTests: XCTestCase {
         )
     }
     
-    func testKeyedCursorUpdate() async throws {
+    func testKeyedCursorUpdate() throws {
         let store = Store(
             state: ParentModel(
                 keyedChildren: [
@@ -165,8 +163,6 @@ class ComponentMappingTests: XCTestCase {
         )
         store.send(.keyedChild(action: .setText("BBB"), key: "a"))
         store.send(.keyedChild(action: .setText("AAA"), key: "a"))
-        
-        try await Task.sleep(for: .seconds(0.1))
 
         XCTAssertEqual(
             store.state.keyedChildren["a"]?.text,
@@ -190,15 +186,13 @@ class ComponentMappingTests: XCTestCase {
         )
     }
     
-    func testCursorUpdate() async throws {
+    func testCursorUpdate() throws {
         let store = Store(
             state: ParentModel(),
             environment: ()
         )
         store.send(.setText("Woo"))
         store.send(.setText("Woo"))
-
-        try await Task.sleep(for: .seconds(0.1))
 
         XCTAssertEqual(
             store.state.child.text,

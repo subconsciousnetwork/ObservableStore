@@ -86,15 +86,13 @@ final class ObservableStoreTests: XCTestCase {
         self.cancellables = Set()
     }
     
-    func testStateAdvance() async throws {
+    func testStateAdvance() throws {
         let store = Store(
             state: AppModel(),
             environment: AppModel.Environment()
         )
         
         store.send(.increment)
-        
-        try await Task.sleep(for: .seconds(0.1))
         
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
