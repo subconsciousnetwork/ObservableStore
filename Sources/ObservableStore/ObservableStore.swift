@@ -258,16 +258,23 @@ where Model: ModelProtocol
     public var environment: Model.Environment
 
     /// Logger to log actions sent to store.
-    private var logger: Logger?
+    private var logger: Logger
+    /// Should log?
+    var loggingEnabled: Bool
 
     public init(
         state: Model,
         environment: Model.Environment,
+        loggingEnabled: Bool = false,
         logger: Logger? = nil
     ) {
         self.state = state
         self.environment = environment
-        self.logger = logger
+        self.loggingEnabled = loggingEnabled
+        self.logger = logger ?? Logger(
+            subsystem: "ObservableStore",
+            category: "Store"
+        )
 
         self.cancelFx = self.fx
             .sink(receiveValue: { [weak self] action in
@@ -281,12 +288,14 @@ where Model: ModelProtocol
     public convenience init(
         create: (Model.Environment) -> Update<Model>,
         environment: Model.Environment,
+        loggingEnabled: Bool = false,
         logger: Logger? = nil
     ) {
         let update = create(environment)
         self.init(
             state: update.state,
             environment: environment,
+            loggingEnabled: loggingEnabled,
             logger: logger
         )
         self.subscribe(to: update.fx)
@@ -299,11 +308,13 @@ where Model: ModelProtocol
         state: Model,
         action: Model.Action,
         environment: Model.Environment,
+        loggingEnabled: Bool = false,
         logger: Logger? = nil
     ) {
         self.init(
             state: state,
             environment: environment,
+            loggingEnabled: loggingEnabled,
             logger: logger
         )
         self.send(action)
@@ -322,7 +333,7 @@ where Model: ModelProtocol
     /// `send(_:)` is run *synchronously*. It is up to you to guarantee it is
     /// run on main thread when SwiftUI is being used.
     public func send(_ action: Model.Action) {
-        if let logger = logger {
+        if loggingEnabled {
             logger.log("Action: \(String(describing: action))")
         }
 
