@@ -6,7 +6,6 @@
 import Foundation
 import Combine
 import SwiftUI
-import os
 
 /// Fx is a publisher that publishes actions and never fails.
 public typealias Fx<Action> = AnyPublisher<Action, Never>
@@ -17,15 +16,11 @@ public protocol ModelProtocol: Equatable {
     associatedtype Action
     associatedtype Environment
 
-    associatedtype UpdateType: UpdateProtocol where
-        UpdateType.Model == Self,
-        UpdateType.Action == Self.Action
-
     static func update(
         state: Self,
         action: Action,
         environment: Environment
-    ) -> UpdateType
+    ) -> Update<Self>
 }
 
 extension ModelProtocol {
@@ -40,16 +35,16 @@ extension ModelProtocol {
         state: Self,
         actions: [Action],
         environment: Environment
-    ) -> UpdateType {
+    ) -> Update<Self> {
         actions.reduce(
-            UpdateType(state: state),
+            Update(state: state),
             { result, action in
                 let next = update(
                     state: result.state,
                     action: action,
                     environment: environment
                 )
-                return UpdateType(
+                return Update(
                     state: next.state,
                     fx: result.fx.merge(with: next.fx).eraseToAnyPublisher(),
                     transaction: next.transaction
@@ -79,18 +74,18 @@ extension ModelProtocol {
         state: Self,
         action viewAction: ViewModel.Action,
         environment: ViewModel.Environment
-    ) -> UpdateType {
+    ) -> Update<Self> {
         // If getter returns nil (as in case of a list item that no longer
         // exists), do nothing.
         guard let inner = get(state) else {
-            return UpdateType(state: state)
+            return Update(state: state)
         }
         let next = ViewModel.update(
             state: inner,
             action: viewAction,
             environment: environment
         )
-        return UpdateType(
+        return Update(
             state: set(state, next.state),
             fx: next.fx.map(tag).eraseToAnyPublisher(),
             transaction: next.transaction
@@ -98,66 +93,9 @@ extension ModelProtocol {
     }
 }
 
-/// `UpdateProtocol` represents a state change, together with an `Fx` publisher,
-/// and an optional `Transaction`.
-public protocol UpdateProtocol {
-    associatedtype Model
-    associatedtype Action
-    
-    init(
-        state: Model,
-        fx: Fx<Action>,
-        transaction: Transaction?
-    )
-
-    var state: Model { get set }
-    var fx: Fx<Action> { get set }
-    var transaction: Transaction? { get set }
-}
-
-extension UpdateProtocol {
-    public init(state: Model, animation: Animation? = nil) {
-        self.init(
-            state: state,
-            fx: Empty(completeImmediately: true).eraseToAnyPublisher(),
-            transaction: Transaction(animation: animation)
-        )
-    }
-    
-    public init(
-        state: Model,
-        fx: Fx<Action>,
-        animation: Animation? = nil
-    ) {
-        self.init(
-            state: state,
-            fx: fx,
-            transaction: Transaction(animation: animation)
-        )
-    }
-    
-    /// Merge existing fx together with new fx.
-    /// - Returns a new `Update`
-    public func mergeFx(_ fx: Fx<Action>) -> Self {
-        var this = self
-        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
-        return this
-    }
-
-    /// Set explicit animation for this update.
-    /// Sets new transaction with specified animation.
-    /// - Returns a new `Update`
-    public func animation(_ animation: Animation? = .default) -> Self {
-        var this = self
-        this.transaction = Transaction(animation: animation)
-        return this
-    }
-}
-
-/// Concrete implementation of `UpdateProtocol`.
 /// Update represents a state change, together with an `Fx` publisher,
 /// and an optional `Transaction`.
-public struct Update<Model: ModelProtocol>: UpdateProtocol {
+public struct Update<Model: ModelProtocol> {
     /// `State` for this update
     public var state: Model
     /// `Fx` for this update.
@@ -179,6 +117,39 @@ public struct Update<Model: ModelProtocol>: UpdateProtocol {
         self.state = state
         self.fx = fx
         self.transaction = transaction
+    }
+
+    public init(state: Model, animation: Animation? = nil) {
+        self.state = state
+        self.fx = Empty(completeImmediately: true).eraseToAnyPublisher()
+        self.transaction = Transaction(animation: animation)
+    }
+
+    public init(
+        state: Model,
+        fx: Fx<Model.Action>,
+        animation: Animation? = nil
+    ) {
+        self.state = state
+        self.fx = fx
+        self.transaction = Transaction(animation: animation)
+    }
+
+    /// Merge existing fx together with new fx.
+    /// - Returns a new `Update`
+    public func mergeFx(_ fx: Fx<Model.Action>) -> Update<Model> {
+        var this = self
+        this.fx = self.fx.merge(with: fx).eraseToAnyPublisher()
+        return this
+    }
+
+    /// Set explicit animation for this update.
+    /// Sets new transaction with specified animation.
+    /// - Returns a new `Update`
+    public func animation(_ animation: Animation? = .default) -> Self {
+        var this = self
+        this.transaction = Transaction(animation: animation)
+        return this
     }
 }
 
@@ -204,43 +175,17 @@ public protocol StoreProtocol {
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
-    private var cancelTransactions: AnyCancellable?
-    
-    /// Cancellable for fx subscription.
-    private var cancelFx: AnyCancellable?
-    
+    /// Stores cancellables by ID
+    private(set) var cancellables: [UUID: AnyCancellable] = [:]
     /// Private for all actions sent to the store.
-    private var _actions = PassthroughSubject<Model.Action, Never>()
-    
+    private var _actions: PassthroughSubject<Model.Action, Never>
     /// Publisher for all actions sent to the store.
     public var actions: AnyPublisher<Model.Action, Never> {
         _actions.eraseToAnyPublisher()
     }
-    
-    /// Source publisher for batches of fx modeled as publishers.
-    private var _fxBatches = PassthroughSubject<Fx<Model.Action>, Never>()
-    
-    /// `fx` represents a flat stream of actions from all fx publishers.
-    private var fx: AnyPublisher<Model.Action, Never> {
-        _fxBatches
-            .flatMap({ publisher in publisher })
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
-    }
-    
-    /// Publisher for updates performed on state
-    private var _updates = PassthroughSubject<Model.UpdateType, Never>()
-
-    /// Publisher for updates performed on state.
-    /// `updates` is guaranteed to fire after the state has changed.
-    public var updates: AnyPublisher<Model.UpdateType, Never> {
-        _updates.eraseToAnyPublisher()
-    }
-
     /// Current state.
     /// All writes to state happen through actions sent to `Store.send`.
     @Published public private(set) var state: Model
-
     /// Environment, which typically holds references to outside information,
     /// such as API methods.
     ///
@@ -257,29 +202,13 @@ where Model: ModelProtocol
     /// app is stopped.
     public var environment: Model.Environment
 
-    /// Logger to log actions sent to store.
-    private var logger: Logger
-    /// Should log?
-    var loggingEnabled: Bool
-
     public init(
         state: Model,
-        environment: Model.Environment,
-        loggingEnabled: Bool = false,
-        logger: Logger? = nil
+        environment: Model.Environment
     ) {
         self.state = state
         self.environment = environment
-        self.loggingEnabled = loggingEnabled
-        self.logger = logger ?? Logger(
-            subsystem: "ObservableStore",
-            category: "Store"
-        )
-
-        self.cancelFx = self.fx
-            .sink(receiveValue: { [weak self] action in
-                self?.send(action)
-            })
+        self._actions = PassthroughSubject<Model.Action, Never>()
     }
 
     /// Initialize with a closure that receives environment.
@@ -287,17 +216,10 @@ where Model: ModelProtocol
     /// kicking off actions once at store creation.
     public convenience init(
         create: (Model.Environment) -> Update<Model>,
-        environment: Model.Environment,
-        loggingEnabled: Bool = false,
-        logger: Logger? = nil
+        environment: Model.Environment
     ) {
         let update = create(environment)
-        self.init(
-            state: update.state,
-            environment: environment,
-            loggingEnabled: loggingEnabled,
-            logger: logger
-        )
+        self.init(state: update.state, environment: environment)
         self.subscribe(to: update.fx)
     }
 
@@ -307,40 +229,69 @@ where Model: ModelProtocol
     public convenience init(
         state: Model,
         action: Model.Action,
-        environment: Model.Environment,
-        loggingEnabled: Bool = false,
-        logger: Logger? = nil
+        environment: Model.Environment
     ) {
-        self.init(
-            state: state,
-            environment: environment,
-            loggingEnabled: loggingEnabled,
-            logger: logger
-        )
+        self.init(state: state, environment: environment)
         self.send(action)
     }
 
-    /// Subscribe to a publisher of actions, send the actions it publishes
-    /// to the store.
+    /// Subscribe to a publisher of actions, piping them through to
+    /// the store.
+    ///
+    /// Holds on to the cancellable until publisher completes.
+    /// When publisher completes, removes cancellable.
     public func subscribe(to fx: Fx<Model.Action>) {
-        self._fxBatches.send(fx)
+        // Create a UUID for the cancellable.
+        // Store cancellable in dictionary by UUID.
+        // Remove cancellable from dictionary upon effect completion.
+        // This retains the effect pipeline for as long as it takes to complete
+        // the effect, and then removes it, so we don't have a cancellables
+        // memory leak.
+        let id = UUID()
+
+        // Receive Fx on main thread. This does two important things:
+        //
+        // First, SwiftUI requires that any state mutations that would change
+        // views happen on the main thread. Receiving on main ensures that
+        // all fx-driven state transitions happen on main, even if the
+        // publisher is off-main-thread.
+        //
+        // Second, if we didn't schedule receive on main, it would be possible
+        // for publishers to complete immediately, causing receiveCompletion
+        // to attempt to remove the publisher from `cancellables` before
+        // it is added. By scheduling to receive publisher on main,
+        // we force publisher to complete on next tick, ensuring that it
+        // is always first added, then removed from `cancellables`.
+        let cancellable = fx
+            .receive(
+                on: DispatchQueue.main,
+                options: .init(qos: .default)
+            )
+            .sink(
+                receiveCompletion: { [weak self] _ in
+                    self?.cancellables.removeValue(forKey: id)
+                },
+                receiveValue: { [weak self] action in
+                    self?.send(action)
+                }
+            )
+        self.cancellables[id] = cancellable
     }
 
     /// Send an action to the store to update state and generate effects.
     /// Any effects generated are fed back into the store.
     ///
     /// Note: SwiftUI requires that all UI changes happen on main thread.
-    /// `send(_:)` is run *synchronously*. It is up to you to guarantee it is
-    /// run on main thread when SwiftUI is being used.
+    /// We run effects as-given, without forcing them on to main thread.
+    /// This means that main-thread effects will be run immediately, enabling
+    /// you to drive things like withAnimation via actions.
+    /// However it also means that publishers which run off-main-thread MUST
+    /// make sure that they join the main thread (e.g. with
+    /// `.receive(on: DispatchQueue.main)`).
     public func send(_ action: Model.Action) {
-        if loggingEnabled {
-            logger.log("Action: \(String(describing: action))")
-        }
-
-        // Dispatch action before state change
-        _actions.send(action)
-
-        // Create next state update
+        /// Broadcast action to any outside subscribers
+        self._actions.send(action)
+        // Generate next state and effect
         let next = Model.update(
             state: self.state,
             action: action,
@@ -368,12 +319,8 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
-
-        // Run effects
+        // Run effect
         self.subscribe(to: next.fx)
-
-        // Dispatch update after state change
-        self._updates.send(next)
     }
 }
 
