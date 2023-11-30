@@ -204,8 +204,6 @@ public protocol StoreProtocol {
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
-    private var cancelTransactions: AnyCancellable?
-    
     /// Cancellable for fx subscription.
     private var cancelFx: AnyCancellable?
     
