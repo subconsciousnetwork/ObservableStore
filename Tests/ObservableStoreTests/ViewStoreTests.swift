@@ -106,7 +106,7 @@ final class ViewStoreTests: XCTestCase {
         )
         
         viewStore.send(.setText("Foo"))
-        
+
         XCTAssertEqual(
             store.state.child.text,
             "Foo"

@@ -139,7 +139,7 @@ class ComponentMappingTests: XCTestCase {
         
         send(.setText("Foo"))
         send(.setText("Bar"))
-        
+
         XCTAssertEqual(
             store.state.child.text,
             "Bar"
@@ -163,6 +163,7 @@ class ComponentMappingTests: XCTestCase {
         )
         store.send(.keyedChild(action: .setText("BBB"), key: "a"))
         store.send(.keyedChild(action: .setText("AAA"), key: "a"))
+
         XCTAssertEqual(
             store.state.keyedChildren["a"]?.text,
             "AAA",
@@ -192,6 +193,7 @@ class ComponentMappingTests: XCTestCase {
         )
         store.send(.setText("Woo"))
         store.send(.setText("Woo"))
+
         XCTAssertEqual(
             store.state.child.text,
             "Woo",
