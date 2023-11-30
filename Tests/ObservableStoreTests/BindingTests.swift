@@ -85,7 +85,7 @@ final class BindingTests: XCTestCase {
 
         view.text = "Foo"
         view.text = "Bar"
-
+        
         XCTAssertEqual(
             store.state.text,
             "Bar"
