@@ -93,10 +93,89 @@ final class ObservableStoreTests: XCTestCase {
         )
         
         store.send(.increment)
-        
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
 
+    /// Tests that the immediately-completing empty Fx used as the default for
+    /// updates get removed from the cancellables array.
+    /// 
+    /// Failure to remove immediately-completing fx would cause a memory leak.
+    func testEmptyFxRemovedOnComplete() {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+        store.send(.increment)
+        store.send(.increment)
+        store.send(.increment)
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    /// Tests that immediately-completing Fx get removed from the cancellables.
+    ///
+    /// array. Failure to remove immediately-completing fx would cause a
+    /// memory leak.
+    ///
+    /// When you don't specify fx for an update, we default to
+    /// an immediately-completing `Empty` publisher, so this test is
+    /// technically the same as the one above. The difference is that it
+    /// does not rely on an implementation detail of `Update` but instead
+    /// tests this behavior directly, in case the implementation were to
+    /// change somehow.
+    func testEmptyFxThatCompleteImmiedatelyRemovedOnComplete() {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+        store.send(.createEmptyFxThatCompletesImmediately)
+        store.send(.createEmptyFxThatCompletesImmediately)
+        store.send(.createEmptyFxThatCompletesImmediately)
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.1)
+    }
+
+    func testAsyncFxRemovedOnComplete() {
+        let store = Store(
+            state: AppModel(),
+            environment: AppModel.Environment()
+        )
+        store.send(.delayIncrement(0.1))
+        store.send(.delayIncrement(0.2))
+        let expectation = XCTestExpectation(
+            description: "cancellable removed when publisher completes"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            XCTAssertEqual(
+                store.cancellables.count,
+                0,
+                "cancellables removed when publisher completes"
+            )
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 0.5)
+    }
+    
     func testPublishedPropertyFires() throws {
         let store = Store(
             state: AppModel(),
@@ -117,7 +196,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "publisher fires when state changes"
         )
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.async {
             XCTAssertEqual(
                 count,
                 4,
@@ -125,7 +204,7 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 1)
+        wait(for: [expectation], timeout: 0.2)
     }
     
     func testStateOnlySetWhenNotEqual() {
@@ -251,7 +330,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "Sent fx"
         )
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.async {
             // Publisher should fire twice: once for initial state,
             // once for state change.
             XCTAssertEqual(
@@ -261,7 +340,7 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 1)
+        wait(for: [expectation], timeout: 0.1)
     }
 
     func testActionsPublisher() throws {
@@ -285,7 +364,8 @@ final class ObservableStoreTests: XCTestCase {
             description: "actions publisher fires for every action"
         )
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.async {
+
             // Publisher should fire twice: once for initial state,
             // once for state change.
             XCTAssertEqual(
@@ -299,6 +379,6 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 1)
+        wait(for: [expectation], timeout: 0.1)
     }
 }
