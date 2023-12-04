@@ -333,7 +333,7 @@ where Model: ModelProtocol
     public func send(_ action: Model.Action) {
         if loggingEnabled {
             let actionString = String(describing: action)
-            logger.log("Action: \(actionString, privacy: .public)")
+            logger.debug("Action: \(actionString, privacy: .public)")
         }
 
         // Dispatch action before state change
