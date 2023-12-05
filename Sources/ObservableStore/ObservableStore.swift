@@ -332,7 +332,8 @@ where Model: ModelProtocol
     /// run on main thread when SwiftUI is being used.
     public func send(_ action: Model.Action) {
         if loggingEnabled {
-            logger.log("Action: \(String(describing: action))")
+            let actionString = String(describing: action)
+            logger.debug("Action: \(actionString, privacy: .public)")
         }
 
         // Dispatch action before state change
