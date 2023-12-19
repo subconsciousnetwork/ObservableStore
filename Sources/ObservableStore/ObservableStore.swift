@@ -204,8 +204,8 @@ public protocol StoreProtocol {
 public final class Store<Model>: ObservableObject, StoreProtocol
 where Model: ModelProtocol
 {
-    /// Cancellable for fx subscription.
-    private var cancelFx: AnyCancellable?
+    /// Stores cancellables by ID
+    private(set) var cancellables: [UUID: AnyCancellable] = [:]
     
     /// Private for all actions sent to the store.
     private var _actions = PassthroughSubject<Model.Action, Never>()
@@ -213,17 +213,6 @@ where Model: ModelProtocol
     /// Publisher for all actions sent to the store.
     public var actions: AnyPublisher<Model.Action, Never> {
         _actions.eraseToAnyPublisher()
-    }
-    
-    /// Source publisher for batches of fx modeled as publishers.
-    private var _fxBatches = PassthroughSubject<Fx<Model.Action>, Never>()
-    
-    /// `fx` represents a flat stream of actions from all fx publishers.
-    private var fx: AnyPublisher<Model.Action, Never> {
-        _fxBatches
-            .flatMap({ publisher in publisher })
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
     }
     
     /// Publisher for updates performed on state
@@ -273,11 +262,6 @@ where Model: ModelProtocol
             subsystem: "ObservableStore",
             category: "Store"
         )
-
-        self.cancelFx = self.fx
-            .sink(receiveValue: { [weak self] action in
-                self?.send(action)
-            })
     }
 
     /// Initialize with a closure that receives environment.
@@ -318,12 +302,49 @@ where Model: ModelProtocol
         self.send(action)
     }
 
-    /// Subscribe to a publisher of actions, send the actions it publishes
-    /// to the store.
+    /// Subscribe to a publisher of actions, piping them through to
+    /// the store.
+    ///
+    /// Holds on to the cancellable until publisher completes.
+    /// When publisher completes, removes cancellable.
     public func subscribe(to fx: Fx<Model.Action>) {
-        self._fxBatches.send(fx)
-    }
+        // Create a UUID for the cancellable.
+        // Store cancellable in dictionary by UUID.
+        // Remove cancellable from dictionary upon effect completion.
+        // This retains the effect pipeline for as long as it takes to complete
+        // the effect, and then removes it, so we don't have a cancellables
+        // memory leak.
+        let id = UUID()
 
+        // Receive Fx on main thread. This does two important things:
+        //
+        // First, SwiftUI requires that any state mutations that would change
+        // views happen on the main thread. Receiving on main ensures that
+        // all fx-driven state transitions happen on main, even if the
+        // publisher is off-main-thread.
+        //
+        // Second, if we didn't schedule receive on main, it would be possible
+        // for publishers to complete immediately, causing receiveCompletion
+        // to attempt to remove the publisher from `cancellables` before
+        // it is added. By scheduling to receive publisher on main,
+        // we force publisher to complete on next tick, ensuring that it
+        // is always first added, then removed from `cancellables`.
+        let cancellable = fx
+            .receive(
+                on: DispatchQueue.main,
+                options: .init(qos: .default)
+            )
+            .sink(
+                receiveCompletion: { [weak self] _ in
+                    self?.cancellables.removeValue(forKey: id)
+                },
+                receiveValue: { [weak self] action in
+                    self?.send(action)
+                }
+            )
+        self.cancellables[id] = cancellable
+    }
+    
     /// Send an action to the store to update state and generate effects.
     /// Any effects generated are fed back into the store.
     ///
