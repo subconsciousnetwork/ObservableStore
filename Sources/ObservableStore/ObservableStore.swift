@@ -357,9 +357,9 @@ where Model: ModelProtocol
             logger.debug("Action: \(actionString, privacy: .public)")
         }
         
-        Task(priority: .userInitiated) {
+        Task.detached { @MainActor in
             // Dispatch action before state change
-            _actions.send(action)
+            self._actions.send(action)
             
             // Create next state update
             let next = Model.update(
