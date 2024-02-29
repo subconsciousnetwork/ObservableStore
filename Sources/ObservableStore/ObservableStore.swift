@@ -357,39 +357,39 @@ where Model: ModelProtocol
             logger.debug("Action: \(actionString, privacy: .public)")
         }
         
-        Task.detached { @MainActor in
-            // Dispatch action before state change
-            self._actions.send(action)
-            
-            // Create next state update
-            let next = Model.update(
-                state: self.state,
-                action: action,
-                environment: self.environment
-            )
-            // Set `state` if changed.
+        // Dispatch action before state change
+        self._actions.send(action)
+        
+        // Create next state update
+        let next = Model.update(
+            state: self.state,
+            action: action,
+            environment: self.environment
+        )
+        // Set `state` if changed.
+        //
+        // Mutating state (a `@Published` property) will fire `objectWillChange`
+        // and cause any views that subscribe to store to re-evaluate
+        // their body property.
+        //
+        // If no change has occurred, we avoid setting the property
+        // so that body does not need to be reevaluated.
+        if self.state != next.state {
+            // If transaction is specified by update, set state with
+            // that transaction.
             //
-            // Mutating state (a `@Published` property) will fire `objectWillChange`
-            // and cause any views that subscribe to store to re-evaluate
-            // their body property.
-            //
-            // If no change has occurred, we avoid setting the property
-            // so that body does not need to be reevaluated.
-            if self.state != next.state {
-                // If transaction is specified by update, set state with
-                // that transaction.
-                //
-                // Otherwise, if transaction is nil, just set state, and
-                // defer to global transaction.
-                if let transaction = next.transaction {
-                    withTransaction(transaction) {
-                        self.state = next.state
-                    }
-                } else {
+            // Otherwise, if transaction is nil, just set state, and
+            // defer to global transaction.
+            if let transaction = next.transaction {
+                withTransaction(transaction) {
                     self.state = next.state
                 }
+            } else {
+                self.state = next.state
             }
+        }
             
+        Task.detached { @MainActor in
             // Run effects
             self.subscribe(to: next.fx)
             
