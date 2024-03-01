@@ -352,14 +352,20 @@ where Model: ModelProtocol
     /// `send(_:)` is run *synchronously*. It is up to you to guarantee it is
     /// run on main thread when SwiftUI is being used.
     public func send(_ action: Model.Action) {
+        DispatchQueue.main.async { @MainActor in
+            self.sendSync(action)
+        }
+    }
+    
+    public func sendSync(_ action: Model.Action) {
         if loggingEnabled {
             let actionString = String(describing: action)
             logger.debug("Action: \(actionString, privacy: .public)")
         }
-
+        
         // Dispatch action before state change
-        _actions.send(action)
-
+        self._actions.send(action)
+        
         // Create next state update
         let next = Model.update(
             state: self.state,
@@ -388,10 +394,10 @@ where Model: ModelProtocol
                 self.state = next.state
             }
         }
-
+        
         // Run effects
         self.subscribe(to: next.fx)
-
+        
         // Dispatch update after state change
         self._updates.send(next)
     }

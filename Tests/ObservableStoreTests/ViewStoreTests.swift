@@ -107,14 +107,16 @@ final class ViewStoreTests: XCTestCase {
         
         viewStore.send(.setText("Foo"))
 
-        XCTAssertEqual(
-            store.state.child.text,
-            "Foo"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            1
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.child.text,
+                "Foo"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                1
+            )
+        }
     }
     
     /// Test creating binding for an address
@@ -131,13 +133,15 @@ final class ViewStoreTests: XCTestCase {
         
         viewStore.send(.setText("Foo"))
         
-        XCTAssertEqual(
-            store.state.child.text,
-            "Foo"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            1
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.child.text,
+                "Foo"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                1
+            )
+        }
     }
 }

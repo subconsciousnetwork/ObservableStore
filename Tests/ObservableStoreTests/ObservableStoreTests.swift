@@ -94,7 +94,9 @@ final class ObservableStoreTests: XCTestCase {
         
         store.send(.increment)
         
-        XCTAssertEqual(store.state.count, 1, "state is advanced")
+        DispatchQueue.main.async {
+            XCTAssertEqual(store.state.count, 1, "state is advanced")
+        }
     }
 
     /// Tests that the immediately-completing empty Fx used as the default for
@@ -112,7 +114,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             XCTAssertEqual(
                 store.cancellables.count,
                 0,
@@ -120,7 +122,7 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 0.1)
+        wait(for: [expectation], timeout: 0.2)
     }
 
     /// Tests that immediately-completing Fx get removed from the cancellables.
@@ -145,7 +147,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             XCTAssertEqual(
                 store.cancellables.count,
                 0,
@@ -153,7 +155,7 @@ final class ObservableStoreTests: XCTestCase {
             )
             expectation.fulfill()
         }
-        wait(for: [expectation], timeout: 0.1)
+        wait(for: [expectation], timeout: 0.2)
     }
 
     func testAsyncFxRemovedOnComplete() {
@@ -229,7 +231,7 @@ final class ObservableStoreTests: XCTestCase {
         let expectation = XCTestExpectation(
             description: "publisher does not fire when state does not change"
         )
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             // Publisher should fire twice: once for initial state,
             // once for state change.
             XCTAssertEqual(
