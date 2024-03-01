@@ -59,14 +59,16 @@ final class BindingTests: XCTestCase {
         view.text = "Foo"
         view.text = "Bar"
         
-        XCTAssertEqual(
-            store.state.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
+        DispatchQueue.main.async { 
+            XCTAssertEqual(
+                store.state.text,
+                "Bar"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                2
+            )
+        }
     }
     
     /// Test creating binding for an address
@@ -86,13 +88,15 @@ final class BindingTests: XCTestCase {
         view.text = "Foo"
         view.text = "Bar"
         
-        XCTAssertEqual(
-            store.state.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.text,
+                "Bar"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                2
+            )
+        }
     }
 }

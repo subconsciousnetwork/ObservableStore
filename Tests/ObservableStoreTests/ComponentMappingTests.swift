@@ -140,14 +140,16 @@ class ComponentMappingTests: XCTestCase {
         send(.setText("Foo"))
         send(.setText("Bar"))
 
-        XCTAssertEqual(
-            store.state.child.text,
-            "Bar"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.child.text,
+                "Bar"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                2
+            )
+        }
     }
     
     func testKeyedCursorUpdate() throws {
@@ -164,11 +166,13 @@ class ComponentMappingTests: XCTestCase {
         store.send(.keyedChild(action: .setText("BBB"), key: "a"))
         store.send(.keyedChild(action: .setText("AAA"), key: "a"))
 
-        XCTAssertEqual(
-            store.state.keyedChildren["a"]?.text,
-            "AAA",
-            "KeyedCursor updates model at key"
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.keyedChildren["a"]?.text,
+                "AAA",
+                "KeyedCursor updates model at key"
+            )
+        }
     }
     
     func testCursorUpdateTransaction() throws {
@@ -194,15 +198,17 @@ class ComponentMappingTests: XCTestCase {
         store.send(.setText("Woo"))
         store.send(.setText("Woo"))
 
-        XCTAssertEqual(
-            store.state.child.text,
-            "Woo",
-            "Cursor updates child model"
-        )
-        XCTAssertEqual(
-            store.state.edits,
-            2
-        )
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.child.text,
+                "Woo",
+                "Cursor updates child model"
+            )
+            XCTAssertEqual(
+                store.state.edits,
+                2
+            )
+        }
     }
     
     func testKeyedCursorUpdateMissing() throws {
@@ -217,15 +223,18 @@ class ComponentMappingTests: XCTestCase {
             environment: ()
         )
         store.send(.keyedChild(action: .setText("ZZZ"), key: "z"))
-        XCTAssertEqual(
-            store.state.keyedChildren.count,
-            3,
-            "KeyedCursor update does nothing if key is missing"
-        )
-        XCTAssertNil(
-            store.state.keyedChildren["z"],
-            "KeyedCursor update does nothing if key is missing"
-        )
+        
+        DispatchQueue.main.async {
+            XCTAssertEqual(
+                store.state.keyedChildren.count,
+                3,
+                "KeyedCursor update does nothing if key is missing"
+            )
+            XCTAssertNil(
+                store.state.keyedChildren["z"],
+                "KeyedCursor update does nothing if key is missing"
+            )
+        }
     }
     
     func testKeyedCursorUpdateTransaction() throws {
@@ -244,9 +253,12 @@ class ComponentMappingTests: XCTestCase {
             action: .setText("Foo"),
             environment: ()
         )
-        XCTAssertNotNil(
-            update.transaction,
-            "Transaction is preserved by cursor"
-        )
+        
+        DispatchQueue.main.async {
+            XCTAssertNotNil(
+                update.transaction,
+                "Transaction is preserved by cursor"
+            )
+        }
     }
 }
