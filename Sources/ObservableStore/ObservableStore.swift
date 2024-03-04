@@ -190,7 +190,20 @@ public protocol StoreProtocol {
 
     var state: Model { get }
 
-    func send(_ action: Model.Action) -> Void
+    func transact(_ action: Model.Action) -> Void
+}
+
+extension StoreProtocol {
+    /// Send an action to the store to update state and generate effects.
+    /// Any effects generated are fed back into the store.
+    ///
+    /// Note: SwiftUI requires that all UI changes happen on main thread.
+    /// `send(_:)` is run *asynchronously*.
+    nonisolated public func send(_ action: Model.Action) {
+        Task { @MainActor in
+            self.transact(action)
+        }
+    }
 }
 
 /// Store is a source of truth for a state.
@@ -206,15 +219,15 @@ where Model: ModelProtocol
 {
     /// Stores cancellables by ID
     private(set) var cancellables: [UUID: AnyCancellable] = [:]
-    
+
     /// Private for all actions sent to the store.
     private var _actions = PassthroughSubject<Model.Action, Never>()
-    
+
     /// Publisher for all actions sent to the store.
     public var actions: AnyPublisher<Model.Action, Never> {
         _actions.eraseToAnyPublisher()
     }
-    
+
     /// Publisher for updates performed on state
     private var _updates = PassthroughSubject<Model.UpdateType, Never>()
 
@@ -344,14 +357,19 @@ where Model: ModelProtocol
             )
         self.cancellables[id] = cancellable
     }
-    
+
     /// Send an action to the store to update state and generate effects.
     /// Any effects generated are fed back into the store.
     ///
     /// Note: SwiftUI requires that all UI changes happen on main thread.
-    /// `send(_:)` is run *synchronously*. It is up to you to guarantee it is
-    /// run on main thread when SwiftUI is being used.
-    public func send(_ action: Model.Action) {
+    /// `store.transact(_:)` is run *synchronously*, but is not isolated to the
+    /// main actor. This is because many SwiftUI APIs like Binding are not
+    /// isolated to the main actor, yet require synchronous state change.
+    ///
+    /// It is recommended you call `store.send(:)` which calls `.transact()`
+    /// *asynchronously* from a main actor isolated task. This will ensure
+    /// that all state change happens on the main thread.
+    public func transact(_ action: Model.Action) {
         if loggingEnabled {
             let actionString = String(describing: action)
             logger.debug("Action: \(actionString, privacy: .public)")
@@ -413,7 +431,7 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     /// the value using a closure). Using the same approach as Binding
     /// offers the most reliable results.
     private var _get: () -> ViewModel
-    private var _send: (ViewModel.Action) -> Void
+    private var _transact: (ViewModel.Action) -> Void
 
     /// Initialize a ViewStore from a `get` closure and a `send` closure.
     /// These closures read from a parent store to provide a type-erased
@@ -421,18 +439,18 @@ public struct ViewStore<ViewModel: ModelProtocol>: StoreProtocol {
     /// model and actions.
     public init(
         get: @escaping () -> ViewModel,
-        send: @escaping (ViewModel.Action) -> Void
+        transact: @escaping (ViewModel.Action) -> Void
     ) {
         self._get = get
-        self._send = send
+        self._transact = transact
     }
 
     public var state: ViewModel {
         self._get()
     }
 
-    public func send(_ action: ViewModel.Action) {
-        self._send(action)
+    public func transact(_ action: ViewModel.Action) {
+        self._transact(action)
     }
 }
 
@@ -445,7 +463,7 @@ extension ViewStore {
     ) {
         self.init(
             get: { get(store.state) },
-            send: { action in store.send(tag(action)) }
+            transact: { action in store.transact(tag(action)) }
         )
     }
 }
@@ -607,12 +625,12 @@ extension Binding {
     /// - Returns a binding suitable for use in a vanilla SwiftUI view.
     public init<Action>(
         get: @escaping () -> Value,
-        send: @escaping (Action) -> Void,
+        transact: @escaping (Action) -> Void,
         tag: @escaping (Value) -> Action
     ) {
         self.init(
             get: get,
-            set: { value in send(tag(value)) }
+            set: { value in transact(tag(value)) }
         )
     }
 }
@@ -624,7 +642,7 @@ extension StoreProtocol {
     ) -> Binding<Value> {
         Binding(
             get: { get(self.state) },
-            set: { value in self.send(tag(value)) }
+            set: { value in self.transact(tag(value)) }
         )
     }
 }

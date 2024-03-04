@@ -133,7 +133,7 @@ class ComponentMappingTests: XCTestCase {
         )
         
         let send = Address.forward(
-            send: store.send,
+            send: store.transact,
             tag: ParentChildCursor.default.tag
         )
         
@@ -161,8 +161,8 @@ class ComponentMappingTests: XCTestCase {
             ),
             environment: ()
         )
-        store.send(.keyedChild(action: .setText("BBB"), key: "a"))
-        store.send(.keyedChild(action: .setText("AAA"), key: "a"))
+        store.transact(.keyedChild(action: .setText("BBB"), key: "a"))
+        store.transact(.keyedChild(action: .setText("AAA"), key: "a"))
 
         XCTAssertEqual(
             store.state.keyedChildren["a"]?.text,
@@ -191,8 +191,8 @@ class ComponentMappingTests: XCTestCase {
             state: ParentModel(),
             environment: ()
         )
-        store.send(.setText("Woo"))
-        store.send(.setText("Woo"))
+        store.transact(.setText("Woo"))
+        store.transact(.setText("Woo"))
 
         XCTAssertEqual(
             store.state.child.text,
