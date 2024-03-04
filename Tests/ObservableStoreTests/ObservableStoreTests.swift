@@ -92,8 +92,8 @@ final class ObservableStoreTests: XCTestCase {
             environment: AppModel.Environment()
         )
         
-        store.send(.increment)
-        
+        store.transact(.increment)
+
         XCTAssertEqual(store.state.count, 1, "state is advanced")
     }
 
@@ -139,9 +139,9 @@ final class ObservableStoreTests: XCTestCase {
             state: AppModel(),
             environment: AppModel.Environment()
         )
-        store.send(.createEmptyFxThatCompletesImmediately)
-        store.send(.createEmptyFxThatCompletesImmediately)
-        store.send(.createEmptyFxThatCompletesImmediately)
+        store.transact(.createEmptyFxThatCompletesImmediately)
+        store.transact(.createEmptyFxThatCompletesImmediately)
+        store.transact(.createEmptyFxThatCompletesImmediately)
         let expectation = XCTestExpectation(
             description: "cancellable removed when publisher completes"
         )
@@ -221,11 +221,11 @@ final class ObservableStoreTests: XCTestCase {
             })
             .store(in: &cancellables)
         
-        store.send(.setCount(10))
-        store.send(.setCount(10))
-        store.send(.setCount(10))
-        store.send(.setCount(10))
-        
+        store.transact(.setCount(10))
+        store.transact(.setCount(10))
+        store.transact(.setCount(10))
+        store.transact(.setCount(10))
+
         let expectation = XCTestExpectation(
             description: "publisher does not fire when state does not change"
         )
@@ -357,10 +357,10 @@ final class ObservableStoreTests: XCTestCase {
             })
             .store(in: &cancellables)
         
-        store.send(.setCount(1))
-        store.send(.setCount(2))
-        store.send(.setCount(3))
-        
+        store.transact(.setCount(1))
+        store.transact(.setCount(2))
+        store.transact(.setCount(3))
+
         let expectation = XCTestExpectation(
             description: "actions publisher fires for every action"
         )

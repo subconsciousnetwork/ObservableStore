@@ -105,7 +105,7 @@ final class ViewStoreTests: XCTestCase {
             tag: ParentChildCursor.default.tag
         )
         
-        viewStore.send(.setText("Foo"))
+        viewStore.transact(.setText("Foo"))
 
         XCTAssertEqual(
             store.state.child.text,
@@ -129,7 +129,7 @@ final class ViewStoreTests: XCTestCase {
             tag: ParentChildCursor.default.tag
         )
         
-        viewStore.send(.setText("Foo"))
+        viewStore.transact(.setText("Foo"))
         
         XCTAssertEqual(
             store.state.child.text,
